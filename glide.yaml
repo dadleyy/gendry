@@ -1,2 +1,5 @@
 package: github.com/dadleyy/gendry
-import: []
+import:
+- package: github.com/golang/tools
+  subpackages:
+  - cover
