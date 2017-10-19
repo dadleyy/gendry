@@ -1,9 +1,17 @@
-image: golang:1.7
+image: golang:1.9
 options:
   docker: true
 pipelines:
   default:
   - step:
       script:
+      - go version
+      - export ORIGINAL_DIRECTORY=$(pwd)
+      - export DESIRED_DIRECTORY="${GOPATH}/src/github/dadleyy/gendry"
+      - mkdir -p $DESIRED_DIRECTORY
+      - pushd $DESIRED_DIRECTORY/..
+      - mv $ORIGINAL_DIRECTORY/* $DESIRED_DIRECTORY
+      - pushd $DESIRED_DIRECTORY
       - make
       - make test
+      - popd
