@@ -3,3 +3,5 @@ import:
 - package: golang.org/x/tools
   subpackages:
   - cover
+- package: github.com/franela/goblin
+  version: ~0.0.1
