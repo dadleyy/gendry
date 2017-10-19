@@ -1,0 +1,8 @@
+hash: 8455d9e981ea39690dbf5fd83f84e55324f13e6afdab2fe19c291cb66cb173f9
+updated: 2017-10-19T13:53:32.464298169-04:00
+imports:
+- name: golang.org/x/tools
+  version: 9bd2f442688b66c5289262d70f537c2ecf81d7de
+  subpackages:
+  - cover
+testImports: []

@@ -1,0 +1,9 @@
+image: golang:1.7
+options:
+  docker: true
+pipelines:
+  default:
+  - step:
+      script:
+      - make
+      - make test
