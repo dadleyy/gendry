@@ -16,14 +16,15 @@ all: $(EXE)
 $(EXE): $(VENDOR_DIR) $(GO_SRC) $(MAIN)
 	$(GO) build -x -v -o $(EXE) $(MAIN)
 
-test:
-	$(GO) get -v -u github.com/golang/lint/golint
-	$(GO) get -v -u github.com/client9/misspell/cmd/misspell
+test: $(VENDOR_DIR)
 	$(GO) vet $(MAIN)
 	$(GOLINT) $(LINT_FLAGS) $(MAIN)
 	$(MISSPELL) -error $(MAIN)
+	$(GO) test -v ./...
 
 $(VENDOR_DIR):
+	$(GO) get -v -u github.com/golang/lint/golint
+	$(GO) get -v -u github.com/client9/misspell/cmd/misspell
 	$(GO) get -v -u github.com/Masterminds/glide
 	$(GLIDE) install
 

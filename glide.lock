@@ -1,6 +1,8 @@
-hash: 8455d9e981ea39690dbf5fd83f84e55324f13e6afdab2fe19c291cb66cb173f9
-updated: 2017-10-19T13:53:32.464298169-04:00
+hash: fa680d71741c1bd046394e6559e5704779c841a8cb4228feead460c03310f792
+updated: 2017-10-19T16:52:37.687664222-04:00
 imports:
+- name: github.com/franela/goblin
+  version: 74c9fe110d4bfd04c222a089a309e0a97e258534
 - name: golang.org/x/tools
   version: 9bd2f442688b66c5289262d70f537c2ecf81d7de
   subpackages:
