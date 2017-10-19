@@ -5,6 +5,9 @@ MISSPELL=misspell
 
 EXE=./dist/bin/gendry
 
+LDFLAGS="-s -w"
+BUILD_FLAGS=-x -v -ldflags $(LDFLAGS)
+TEST_FLAGS=-v -coverprofile=coverage.txt -covermode=atomic
 LINT_FLAGS=-set_exit_status
 VENDOR_DIR=./vendor
 
@@ -14,13 +17,13 @@ $GO_SRC=$(wildcard main.go)
 all: $(EXE)
 
 $(EXE): $(VENDOR_DIR) $(GO_SRC) $(MAIN)
-	$(GO) build -x -v -o $(EXE) $(MAIN)
+	$(GO) build $(BUILD_FLAGS) -o $(EXE) $(MAIN)
 
 test: $(VENDOR_DIR)
 	$(GO) vet $(MAIN)
 	$(GOLINT) $(LINT_FLAGS) $(MAIN)
 	$(MISSPELL) -error $(MAIN)
-	$(GO) test -v ./...
+	$(GO) test $(TEST_FLAGS) ./...
 
 $(VENDOR_DIR):
 	$(GO) get -v -u github.com/golang/lint/golint
