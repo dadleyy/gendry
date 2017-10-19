@@ -6,22 +6,32 @@ import "log"
 import "flag"
 import "path"
 import "bufio"
-import "bytes"
 import "regexp"
 import "strings"
+import "strconv"
+import "net/url"
 import "net/http"
-
-// import "github.com/golang/tools/cover"
+import "golang.org/x/tools/cover"
 
 const (
-	defaultReportHome = "http://coverage.marlow.sizethree.cc.s3.amazonaws.com"
-	modeIdentifier    = "mode: "
+	defaultReportHome    = "http://coverage.marlow.sizethree.cc.s3.amazonaws.com"
+	modeIdentifier       = "mode: "
+	defaultShieldText    = "generated--coverage"
+	shieldConfigTemplate = "%s-%.2f%%-%s"
+	shieldURLTemplate    = "https://img.shields.io/badge/%s.svg"
 )
 
 var lineRe = regexp.MustCompile(`^(.+):([0-9]+).([0-9]+),([0-9]+).([0-9]+) ([0-9]+) ([0-9]+)$`)
 
 type server struct {
 	reportHome string
+	shieldText string
+}
+
+type reportProfile struct {
+	coverage float64
+	files    map[string]*cover.Profile
+	mode     string
 }
 
 func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Request) {
@@ -31,51 +41,57 @@ func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Req
 		reportName = commit
 	}
 
-	reportUrl := fmt.Sprintf("%s/%s", s.reportHome, path.Join(reportName, "library.coverage.txt"))
-	r, e := http.Get(reportUrl)
+	reportURL := fmt.Sprintf("%s/%s", s.reportHome, path.Join(reportName, "library.coverage.txt"))
+	r, e := http.Get(reportURL)
 
 	if e != nil {
-		log.Printf("error fetching %s: %s", reportUrl, e.Error())
+		log.Printf("error fetching %s: %s", reportURL, e.Error())
 		responseWriter.WriteHeader(404)
 		return
 	}
 
 	defer r.Body.Close()
 
-	reader := bufio.NewReader(r.Body)
-	scanner := bufio.NewScanner(reader)
-	responseBuffer := new(bytes.Buffer)
+	report, e := parseProfiles(r.Body)
 
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if strings.HasPrefix(line, modeIdentifier) {
-			continue
-		}
-
-		match := lineRe.FindStringSubmatch(line)
-
-		if match == nil {
-			log.Printf("invalid file detected: %s", reportUrl)
-			responseWriter.WriteHeader(422)
-			return
-		}
-
-		fmt.Fprintf(responseBuffer, "%s\n", line)
+	if e != nil {
+		log.Printf("invalid report: %s", e.Error())
+		responseWriter.WriteHeader(404)
+		return
 	}
 
+	color := "414141"
+
+	if report.coverage > 80 {
+		color = "green"
+	}
+
+	escapedConfig := url.PathEscape(fmt.Sprintf(shieldConfigTemplate, s.shieldText, report.coverage, color))
+	shieldURL := fmt.Sprintf(shieldURLTemplate, escapedConfig)
+	shieldResponse, e := http.Get(shieldURL)
+
+	if e != nil {
+		responseWriter.WriteHeader(502)
+		return
+	}
+
+	defer shieldResponse.Body.Close()
+
+	responseWriter.Header().Set("Content-Type", "image/svg+xml")
 	responseWriter.WriteHeader(200)
-	io.Copy(responseWriter, responseBuffer)
+	io.Copy(responseWriter, shieldResponse.Body)
 }
 
 func main() {
 	options := struct {
 		address    string
 		reportHome string
+		shieldText string
 	}{}
 
 	flag.StringVar(&options.address, "address", "0.0.0.0:8080", "the address to bind the http listener to")
 	flag.StringVar(&options.reportHome, "report-home", defaultReportHome, "where to look for coverage reports")
+	flag.StringVar(&options.shieldText, "shield-text", defaultShieldText, "text to display next to percentage")
 	flag.Parse()
 
 	if options.address == "" {
@@ -87,6 +103,7 @@ func main() {
 	go func() {
 		s := &server{
 			reportHome: options.reportHome,
+			shieldText: options.shieldText,
 		}
 
 		closed <- http.ListenAndServe(options.address, s)
@@ -97,58 +114,98 @@ func main() {
 	log.Printf("server terminating")
 }
 
-/*
-	files := make(map[string]*Profile)
-	buf := bufio.NewReader(pf)
-	// First line is "mode: foo", where foo is "set", "count", or "atomic".
-	// Rest of file is in the format
-	//	encoding/base64/base64.go:34.44,37.40 3 1
-	// where the fields are: name.go:line.column,line.column numberOfStatements count
-	s := bufio.NewScanner(buf)
+func parseProfiles(r io.Reader) (*reportProfile, error) {
+	reader := bufio.NewReader(r)
+	scanner := bufio.NewScanner(reader)
+	files := make(map[string]*cover.Profile)
 	mode := ""
-	for s.Scan() {
-		line := s.Text()
-		if mode == "" {
-			const p = "mode: "
-			if !strings.HasPrefix(line, p) || line == p {
-				return nil, fmt.Errorf("bad mode line: %v", line)
-			}
-			mode = line[len(p):]
+
+	var total, covered int64
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if mode == "" && !strings.HasPrefix(line, modeIdentifier) {
+			return nil, fmt.Errorf("invalid-report")
+		}
+
+		if strings.HasPrefix(line, modeIdentifier) {
+			mode = line
 			continue
 		}
-		m := lineRe.FindStringSubmatch(line)
-		if m == nil {
-			return nil, fmt.Errorf("line %q doesn't match expected format: %v", line, lineRe)
+
+		match := lineRe.FindStringSubmatch(line)
+
+		if match == nil {
+			return nil, fmt.Errorf("invalid-report")
 		}
-		fn := m[1]
-		p := files[fn]
-		if p == nil {
-			p = &Profile{
-				FileName: fn,
+
+		fileName := match[1]
+		existingProfile := files[fileName]
+
+		if existingProfile == nil {
+			existingProfile = &cover.Profile{
+				FileName: fileName,
 				Mode:     mode,
 			}
-			files[fn] = p
+
+			files[fileName] = existingProfile
 		}
-		p.Blocks = append(p.Blocks, ProfileBlock{
-			StartLine: toInt(m[2]),
-			StartCol:  toInt(m[3]),
-			EndLine:   toInt(m[4]),
-			EndCol:    toInt(m[5]),
-			NumStmt:   toInt(m[6]),
-			Count:     toInt(m[7]),
-		})
+
+		intVals, e := atois(match[2:]...)
+
+		if e != nil {
+			return nil, e
+		}
+
+		block := cover.ProfileBlock{
+			StartLine: intVals[0],
+			StartCol:  intVals[1],
+			EndLine:   intVals[2],
+			EndCol:    intVals[3],
+			NumStmt:   intVals[4],
+			Count:     intVals[5],
+		}
+
+		total += int64(block.NumStmt)
+
+		if block.Count > 0 {
+			covered += int64(block.NumStmt)
+		}
+
+		existingProfile.Blocks = append(existingProfile.Blocks, block)
 	}
-	if err := s.Err(); err != nil {
-		return nil, err
+
+	if e := scanner.Err(); e != nil {
+		return nil, e
 	}
-	for _, p := range files {
-		sort.Sort(blocksByStart(p.Blocks))
+
+	percent := float64(0)
+
+	if total > 0 {
+		percent = float64(covered) / float64(total) * 100
 	}
-	// Generate a sorted slice.
-	profiles := make([]*Profile, 0, len(files))
-	for _, profile := range files {
-		profiles = append(profiles, profile)
+
+	return &reportProfile{
+		coverage: percent,
+		files:    files,
+		mode:     mode,
+	}, nil
+}
+
+func atois(strings ...string) ([]int, error) {
+	results := []int{}
+
+	for _, v := range strings {
+		i, e := strconv.Atoi(v)
+
+		if e != nil {
+			return nil, e
+		}
+
+		results = append(results, i)
 	}
-	sort.Sort(byFileName(profiles))
-	return profiles, nil
-*/
+
+	return results, nil
+
+}
