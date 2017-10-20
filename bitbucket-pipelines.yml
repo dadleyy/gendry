@@ -3,46 +3,63 @@ options:
   docker: true
 pipelines:
   default:
-  - step:
-      name: "Compile & Test"
-      script:
-        - go version
-        - export ORIGINAL_DIRECTORY=$(pwd)
-        - export DESIRED_DIRECTORY="${GOPATH}/src/github/dadleyy/gendry"
-        - mkdir -p $DESIRED_DIRECTORY
-        - pushd $DESIRED_DIRECTORY/..
-        - mv $ORIGINAL_DIRECTORY/* $DESIRED_DIRECTORY
-        - pushd $DESIRED_DIRECTORY
-        - make EXE=./dist/gendry/bin/gendry
-        - make test
-        - tar -czvf ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz -C ./dist/gendry ./
-        - ls -lah ./dist
-        - popd
-        - popd
-        - echo $BITBUCKET_CLONE_DIR
-        - echo $(pwd)
-        - mkdir -p ./dist
-        - export ARTIFACT_FILE="${DESIRED_DIRECTORY}/dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz"
-        - export DOWNLOAD_FILE="gendry-$(go env GOOS)-$(go env GOARCH).${BITBUCKET_COMMIT}.tar.gz"
-        - cp $ARTIFACT_FILE ./dist/$DOWNLOAD_FILE
-        - ls -lah ./dist
-        - export BB_AUTH_STRING="${BB_USERNAME}:${BB_PASSWORD}"
-        - export BB_DOWNLOAD_URL_PATH="2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads"
-        - export BB_DOWNLOAD_URL="https://${BB_AUTH_STRING}@api.bitbucket.org/${BB_DOWNLOAD_URL_PATH}"
-        - curl -X POST $BB_DOWNLOAD_URL --form files=@"./dist/${DOWNLOAD_FILE}"
-      artifacts:
-        - ./dist/**
-        - ./dist/*.tar.gz
-  - step:
-      name: "Build Image"
-      script:
-        - export DOWNLOAD_FILE="gendry-$(go env GOOS)-$(go env GOARCH).${BITBUCKET_COMMIT}.tar.gz"
-        - export DOWNLOAD_URL="https://bitbucket.org/dadleyy/gendry/downloads/${DOWNLOAD_FILE}"
-        - wget $DOWNLOAD_URL
-        - mv $DOWNLOAD_FILE ./gendry.tar.gz
-        - ls -lah
-        - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
-        - docker build -t dadleyy/gendry:$BITBUCKET_COMMIT -f ./auto/docker/Dockerfile .
-        - docker push dadleyy/gendry:$BITBUCKET_COMMIT
+    - step:
+        name: "Compile & Test"
+        script: &compile
+          - export ORIGINAL_DIRECTORY=$(pwd)
+          - export DESIRED_DIRECTORY="${GOPATH}/src/github.com/dadleyy/gendry"
+          - export BB_AUTH_STRING="${BB_USERNAME}:${BB_PASSWORD}"
+          - export BB_DOWNLOAD_URL_PATH="2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads"
+          - export BB_DOWNLOAD_URL="https://${BB_AUTH_STRING}@api.bitbucket.org/${BB_DOWNLOAD_URL_PATH}"
+          - export ARTIFACT_FILE="${DESIRED_DIRECTORY}/dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz"
+          - export DOWNLOAD_FILE="gendry-$(go env GOOS)-$(go env GOARCH).${BITBUCKET_COMMIT}.tar.gz"
+          - mkdir -p $DESIRED_DIRECTORY
+          - pushd $DESIRED_DIRECTORY/..
+          - mv $ORIGINAL_DIRECTORY/* $DESIRED_DIRECTORY
+          - pushd $DESIRED_DIRECTORY
+          - make EXE=./dist/gendry/bin/gendry
+          - make test
+          - tar -czvf ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz -C ./dist/gendry ./
+          - popd
+          - popd
+          - mkdir -p ./dist
+          - cp $ARTIFACT_FILE ./dist/$DOWNLOAD_FILE
+          - curl -X POST $BB_DOWNLOAD_URL --form files=@"./dist/${DOWNLOAD_FILE}"
+        artifacts:
+          - ./dist/**
+          - ./dist/*.tar.gz
+    - step:
+        name: "Build Image"
+        script: &image
+          - export DOWNLOAD_FILE="gendry-$(go env GOOS)-$(go env GOARCH).${BITBUCKET_COMMIT}.tar.gz"
+          - export DOWNLOAD_URL="https://bitbucket.org/dadleyy/gendry/downloads/${DOWNLOAD_FILE}"
+          - wget $DOWNLOAD_URL
+          - mv $DOWNLOAD_FILE ./gendry.tar.gz
+          - ls -lah
+          - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
+          - docker build -t dadleyy/gendry:$BITBUCKET_COMMIT -f ./auto/docker/Dockerfile .
+          - docker push dadleyy/gendry:$BITBUCKET_COMMIT
+  branches:
+    master:
+      - step:
+          name: "Compile & Test"
+          script: *compile
+      - step:
+          name: "Build Image"
+          script: *image
+      - step:
+          name: "Deploy Image"
+          script:
+            - export CONTAINER_NAME=gendry-$(git rev-parse --short HEAD)
+            - export IMAGE_NAME=dadleyy/gendry:$BITBUCKET_COMMIT
+            - wget https://hyper-install.s3.amazonaws.com/hyper-linux-x86_64.tar.gz
+            - tar xvzf hyper-linux-x86_64.tar.gz
+            - ./hyper config --accesskey=$HYPER_ACCESS_KEY --secretkey=$HYPER_SECRET_KEY --default-region=us-west-1
+            - ./hyper ps -a
+            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper fip detach || echo ""
+            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper stop || echo ""
+            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper rm || echo ""
+            - ./hyper run -d --name $CONTAINER_NAME -p 80:80 $IMAGE_NAME -address=0.0.0.0:80
+            - ./hyper fip attach gendry-prod $CONTAINER_NAME
 definitions:
   caches:
