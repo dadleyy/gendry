@@ -39,11 +39,10 @@ pipelines:
         - export DOWNLOAD_FILE="gendry-$(go env GOOS)-$(go env GOARCH).${BITBUCKET_COMMIT}.tar.gz"
         - export DOWNLOAD_URL="https://bitbucket.org/dadleyy/gendry/downloads/${DOWNLOAD_FILE}"
         - wget $DOWNLOAD_URL
+        - mv $DOWNLOAD_FILE ./gendry.tar.gz
         - ls -lah
-          # - cp ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz ./gendry.tar.gz
-        - ls -lah
-          # - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
-          # - docker build -t dadleyy/gendry:$BITBUCKET_COMMIT -f ./auto/bitbucket/Dockerfile .
-          # - docker push dadleyy/gendry:$BITBUCKET_COMMIT
+        - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
+        - docker build -t dadleyy/gendry:$BITBUCKET_COMMIT -f ./auto/bitbucket/Dockerfile .
+        - docker push dadleyy/gendry:$BITBUCKET_COMMIT
 definitions:
   caches:
