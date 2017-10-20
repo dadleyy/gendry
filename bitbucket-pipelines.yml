@@ -50,6 +50,9 @@ pipelines:
       - step:
           name: "Deploy Image"
           script:
-            - echo "hi"
+            - wget https://hyper-install.s3.amazonaws.com/hyper-linux-x86_64.tar.gz
+            - tar xvzf hyper-linux-x86_64.tar.gz
+            - ./hyper config --accesskey=$HYPER_ACCESS_KEY --secretkey=$HYPER_SECRET_KEY
+            - ./hyper ps -a
 definitions:
   caches:
