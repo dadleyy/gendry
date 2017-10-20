@@ -40,7 +40,7 @@ pipelines:
           - docker build -t dadleyy/gendry:$BITBUCKET_COMMIT -f ./auto/docker/Dockerfile .
           - docker push dadleyy/gendry:$BITBUCKET_COMMIT
   branches:
-    deployment:
+    master:
       - step:
           name: "Compile & Test"
           script: *compile
