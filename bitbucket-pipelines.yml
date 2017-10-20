@@ -7,7 +7,7 @@ pipelines:
         name: "Compile & Test"
         script: &compile
           - export ORIGINAL_DIRECTORY=$(pwd)
-          - export DESIRED_DIRECTORY="${GOPATH}/src/github/dadleyy/gendry"
+          - export DESIRED_DIRECTORY="${GOPATH}/src/github.com/dadleyy/gendry"
           - export BB_AUTH_STRING="${BB_USERNAME}:${BB_PASSWORD}"
           - export BB_DOWNLOAD_URL_PATH="2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads"
           - export BB_DOWNLOAD_URL="https://${BB_AUTH_STRING}@api.bitbucket.org/${BB_DOWNLOAD_URL_PATH}"
@@ -57,9 +57,9 @@ pipelines:
             - ./hyper config --accesskey=$HYPER_ACCESS_KEY --secretkey=$HYPER_SECRET_KEY --default-region=us-west-1
             - ./hyper ps -a
             - ./hyper run -d --name $CONTAINER_NAME -p 80:80 $IMAGE_NAME -address=0.0.0.0:80
-            - ./hyper ps -a -f name=gendry-* -q | xargs hyper fip detach
-            - ./hyper ps -a -f name=gendry-* -q | xargs hyper stop
-            - ./hyper ps -a -f name=gendry-* -q | xargs hyper rm
+            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper fip detach
+            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper stop
+            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper rm
             - ./hyper fip attach gendry-prod $CONTAINER_NAME
 definitions:
   caches:
