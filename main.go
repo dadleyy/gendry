@@ -17,6 +17,7 @@ const (
 	defaultReportHome    = "http://coverage.marlow.sizethree.cc.s3.amazonaws.com"
 	modeIdentifier       = "mode: "
 	defaultShieldText    = "generated--coverage"
+	defaultShieldStyle   = "flat-square"
 	shieldConfigTemplate = "%s-%.2f%%-%s"
 	shieldURLTemplate    = "https://img.shields.io/badge/%s.svg"
 )
@@ -67,10 +68,39 @@ func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Req
 	}
 
 	escapedConfig := url.PathEscape(fmt.Sprintf(shieldConfigTemplate, s.shieldText, report.coverage, color))
-	shieldURL := fmt.Sprintf(shieldURLTemplate, escapedConfig)
-	shieldResponse, e := http.Get(shieldURL)
+	shieldURL, e := url.Parse(fmt.Sprintf(shieldURLTemplate, escapedConfig))
 
 	if e != nil {
+		log.Printf("unable to build shield url: %s", e.Error())
+		responseWriter.WriteHeader(502)
+		return
+	}
+
+	shieldQueryParams := url.Values{
+		"style": []string{defaultShieldStyle},
+	}
+
+	if requestStyle := request.URL.Query().Get("style"); requestStyle != "" {
+		shieldQueryParams.Set("style", requestStyle)
+	}
+
+	shieldURL.RawQuery = shieldQueryParams.Encode()
+
+	log.Printf("requesting shield: %s", shieldURL)
+
+	client := &http.Client{}
+	shieldRequest, e := http.NewRequest("GET", shieldURL.String(), nil)
+
+	if e != nil {
+		log.Printf("unable to request shield data: %s", e.Error())
+		responseWriter.WriteHeader(502)
+		return
+	}
+
+	shieldResponse, e := client.Do(shieldRequest)
+
+	if e != nil {
+		log.Printf("unable to request shield data: %s", e.Error())
 		responseWriter.WriteHeader(502)
 		return
 	}
