@@ -52,7 +52,7 @@ pipelines:
           script:
             - wget https://hyper-install.s3.amazonaws.com/hyper-linux-x86_64.tar.gz
             - tar xvzf hyper-linux-x86_64.tar.gz
-            - ./hyper config --accesskey=$HYPER_ACCESS_KEY --secretkey=$HYPER_SECRET_KEY
+            - ./hyper config --accesskey=$HYPER_ACCESS_KEY --secretkey=$HYPER_SECRET_KEY --default-region=us-west-1
             - ./hyper ps -a
 definitions:
   caches:
