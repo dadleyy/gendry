@@ -36,6 +36,9 @@ pipelines:
   - step:
       name: "Build Image"
       script:
+        - export DOWNLOAD_FILE="gendry-$(go env GOOS)-$(go env GOARCH).${BITBUCKET_COMMIT}.tar.gz"
+        - export DOWNLOAD_URL="https://bitbucket.org/dadleyy/gendry/downloads/${DOWNLOAD_FILE}"
+        - wget $DOWNLOAD_URL
         - ls -lah
           # - cp ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz ./gendry.tar.gz
         - ls -lah
