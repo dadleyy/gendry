@@ -49,6 +49,6 @@ pipelines:
       - step:
           name: "whoa"
           script:
-            - echo "hi"
+            - echo $(git log -n 1 --pretty=format:"%H" HEAD~1)
 definitions:
   caches:
