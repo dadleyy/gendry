@@ -42,7 +42,7 @@ pipelines:
         - mv $DOWNLOAD_FILE ./gendry.tar.gz
         - ls -lah
         - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
-        - docker build -t dadleyy/gendry:$BITBUCKET_COMMIT -f ./auto/bitbucket/Dockerfile .
+        - docker build -t dadleyy/gendry:$BITBUCKET_COMMIT -f ./auto/docker/Dockerfile .
         - docker push dadleyy/gendry:$BITBUCKET_COMMIT
 definitions:
   caches:
