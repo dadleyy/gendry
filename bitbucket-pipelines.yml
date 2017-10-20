@@ -50,9 +50,13 @@ pipelines:
       - step:
           name: "Deploy Image"
           script:
+            - export CONTAINER_NAME=gendry-$(git rev-parse --short HEAD)
+            - export IMAGE_NAME=dadleyy/gendry:$BITBUCKET_COMMIT
             - wget https://hyper-install.s3.amazonaws.com/hyper-linux-x86_64.tar.gz
             - tar xvzf hyper-linux-x86_64.tar.gz
             - ./hyper config --accesskey=$HYPER_ACCESS_KEY --secretkey=$HYPER_SECRET_KEY --default-region=us-west-1
             - ./hyper ps -a
+            - ./hyper run -d --name $CONTAINER_NAME -p 80:80 $IMAGE_NAME -address=0.0.0.0:80
+            - ./hyper fip attach gendry-prod $CONTAINER_NAME
 definitions:
   caches:
