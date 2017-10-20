@@ -25,8 +25,9 @@ const (
 var lineRe = regexp.MustCompile(`^(.+):([0-9]+).([0-9]+),([0-9]+).([0-9]+) ([0-9]+) ([0-9]+)$`)
 
 type server struct {
-	reportHome string
-	shieldText string
+	reportHome    string
+	shieldText    string
+	cacheDuration int
 }
 
 type reportProfile struct {
@@ -107,6 +108,13 @@ func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Req
 
 	defer shieldResponse.Body.Close()
 
+	cacheValue := fmt.Sprintf("max-age=%d", s.cacheDuration)
+
+	if s.cacheDuration < 0 {
+		cacheValue = "no-cache"
+	}
+
+	responseWriter.Header().Set("Cache-Control", cacheValue)
 	responseWriter.Header().Set("Content-Type", "image/svg+xml")
 	responseWriter.WriteHeader(200)
 	io.Copy(responseWriter, shieldResponse.Body)
@@ -114,14 +122,16 @@ func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Req
 
 func main() {
 	options := struct {
-		address    string
-		reportHome string
-		shieldText string
+		address       string
+		reportHome    string
+		shieldText    string
+		cacheDuration int
 	}{}
 
 	flag.StringVar(&options.address, "address", "0.0.0.0:8080", "the address to bind the http listener to")
 	flag.StringVar(&options.reportHome, "report-home", defaultReportHome, "where to look for coverage reports")
 	flag.StringVar(&options.shieldText, "shield-text", defaultShieldText, "text to display next to percentage")
+	flag.IntVar(&options.cacheDuration, "max-cache-age", 10, "amount of seconds for Cache-Control header")
 	flag.Parse()
 
 	if options.address == "" {
@@ -132,8 +142,9 @@ func main() {
 
 	go func() {
 		s := &server{
-			reportHome: options.reportHome,
-			shieldText: options.shieldText,
+			reportHome:    options.reportHome,
+			shieldText:    options.shieldText,
+			cacheDuration: options.cacheDuration,
 		}
 
 		closed <- http.ListenAndServe(options.address, s)
