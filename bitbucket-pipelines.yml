@@ -57,9 +57,9 @@ pipelines:
             - ./hyper config --accesskey=$HYPER_ACCESS_KEY --secretkey=$HYPER_SECRET_KEY --default-region=us-west-1
             - ./hyper ps -a
             - ./hyper run -d --name $CONTAINER_NAME -p 80:80 $IMAGE_NAME -address=0.0.0.0:80
-            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper fip detach
-            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper stop
-            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper rm
+            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper fip detach || echo ""
+            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper stop || echo ""
+            - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper rm || echo ""
             - ./hyper fip attach gendry-prod $CONTAINER_NAME
 definitions:
   caches:
