@@ -5,41 +5,42 @@ pipelines:
   default:
   - step:
       name: "Compile & Test"
-      caches:
-      - dist
-      artifacts:
-      - ./dist/**
-      - ./dist/*.tar.gz
       script:
-      - go version
-      - export ORIGINAL_DIRECTORY=$(pwd)
-      - export DESIRED_DIRECTORY="${GOPATH}/src/github/dadleyy/gendry"
-      - mkdir -p $DESIRED_DIRECTORY
-      - pushd $DESIRED_DIRECTORY/..
-      - mv $ORIGINAL_DIRECTORY/* $DESIRED_DIRECTORY
-      - pushd $DESIRED_DIRECTORY
-      - make EXE=./dist/gendry/bin/gendry
-      - make test
-      - tar -czvf ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz -C ./dist/gendry ./
-      - ls -lah ./dist
-      - popd
-      - popd
-      - echo $BITBUCKET_CLONE_DIR
-      - echo $(pwd)
-      - mkdir -p ./dist
-      - cp $DESIRED_DIRECTORY/dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz ./dist
-      - ls -lah ./dist
+        - go version
+        - export ORIGINAL_DIRECTORY=$(pwd)
+        - export DESIRED_DIRECTORY="${GOPATH}/src/github/dadleyy/gendry"
+        - mkdir -p $DESIRED_DIRECTORY
+        - pushd $DESIRED_DIRECTORY/..
+        - mv $ORIGINAL_DIRECTORY/* $DESIRED_DIRECTORY
+        - pushd $DESIRED_DIRECTORY
+        - make EXE=./dist/gendry/bin/gendry
+        - make test
+        - tar -czvf ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz -C ./dist/gendry ./
+        - ls -lah ./dist
+        - popd
+        - popd
+        - echo $BITBUCKET_CLONE_DIR
+        - echo $(pwd)
+        - mkdir -p ./dist
+        - export ARTIFACT_FILE="${DESIRED_DIRECTORY}/dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz"
+        - export DOWNLOAD_FILE="gendry-$(go env GOOS)-$(go env GOARCH).${BITBUCKET_COMMIT}.tar.gz"
+        - cp $ARTIFACT_FILE ./dist/$DOWNLOAD_FILE
+        - ls -lah ./dist
+        - export BB_AUTH_STRING="${BB_USERNAME}:${BB_PASSWORD}"
+        - export BB_DOWNLOAD_URL_PATH="2.0/repositories/${BITBUCKET_REPO_OWNER}/${BITBUCKET_REPO_SLUG}/downloads"
+        - export BB_DOWNLOAD_URL="https://${BB_AUTH_STRING}@api.bitbucket.org/${BB_DOWNLOAD_URL_PATH}"
+        - curl -X POST $BB_DOWNLOAD_URL --form files=@"./dist/${DOWNLOAD_FILE}"
+      artifacts:
+        - ./dist/**
+        - ./dist/*.tar.gz
   - step:
       name: "Build Image"
-      caches:
-      - dist
       script:
-      - ls -lah
-      - cp ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz ./gendry.tar.gz
-      - ls -lah
-      - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
-      - docker build -t dadleyy/gendry:$BITBUCKET_COMMIT -f ./auto/bitbucket/Dockerfile .
-      - docker push dadleyy/gendry:$BITBUCKET_COMMIT
+        - ls -lah
+          # - cp ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz ./gendry.tar.gz
+        - ls -lah
+          # - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
+          # - docker build -t dadleyy/gendry:$BITBUCKET_COMMIT -f ./auto/bitbucket/Dockerfile .
+          # - docker push dadleyy/gendry:$BITBUCKET_COMMIT
 definitions:
   caches:
-    dist: dist
