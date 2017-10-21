@@ -33,12 +33,13 @@ pipelines:
         script: &image
           - export DOWNLOAD_FILE="gendry-$(go env GOOS)-$(go env GOARCH).${BITBUCKET_COMMIT}.tar.gz"
           - export DOWNLOAD_URL="https://bitbucket.org/dadleyy/gendry/downloads/${DOWNLOAD_FILE}"
+          - export IMAGE_TAG=$(git rev-parse --short HEAD)
           - wget $DOWNLOAD_URL
           - mv $DOWNLOAD_FILE ./gendry.tar.gz
           - ls -lah
           - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
-          - docker build -t dadleyy/gendry:$BITBUCKET_COMMIT -f ./auto/docker/Dockerfile .
-          - docker push dadleyy/gendry:$BITBUCKET_COMMIT
+          - docker build -t dadleyy/gendry:$IMAGE_TAG -f ./auto/docker/Dockerfile .
+          - docker push dadleyy/gendry:$IMAGE_TAG
   branches:
     master:
       - step:
@@ -50,8 +51,9 @@ pipelines:
       - step:
           name: "Deploy Image"
           script:
-            - export CONTAINER_NAME=gendry-$(git rev-parse --short HEAD)
-            - export IMAGE_NAME=dadleyy/gendry:$BITBUCKET_COMMIT
+            - export IMAGE_TAG=$(git rev-parse --short HEAD)
+            - export CONTAINER_NAME=gendry-$IMAGE_TAG
+            - export IMAGE_NAME=dadleyy/gendry:$IMAGE_TAG
             - wget https://hyper-install.s3.amazonaws.com/hyper-linux-x86_64.tar.gz
             - tar xvzf hyper-linux-x86_64.tar.gz
             - ./hyper config --accesskey=$HYPER_ACCESS_KEY --secretkey=$HYPER_SECRET_KEY --default-region=us-west-1
