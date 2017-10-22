@@ -1,0 +1,17 @@
+os: linux
+language: go
+group: stable
+sudo: true
+dist: trusty
+go: 1.9
+jobs:
+  include:
+  - stage: test
+    go: 1.9
+    script:
+      - make test
+  - stage: compile binary
+    go: 1.9
+    script:
+      - make EXE=./dist/bin/gendry
+      - tar -czvf ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz -C ./dist ./
