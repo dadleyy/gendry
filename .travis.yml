@@ -33,4 +33,6 @@ jobs:
   - stage: image
     go: 1.9
     script:
+      - export ARTIFACT_FILE=gendry-$(go env GOOS)-$(go env GOARCH).tar.gz
       - docker pull golang:latest
+      - wget https://github.com/dadleyy/gendry/releases/download/$TRAVIS_TAG/$ARTIFACT_FILE
