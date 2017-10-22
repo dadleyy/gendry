@@ -34,6 +34,8 @@ jobs:
     go: 1.9
     script:
       - export IMAGE_TAG=$(git rev-parse --short HEAD)
+      - export IMAGE_NAME=dadleyy/gendry:$IMAGE_TAG
+      - export CONTAINER_NAME=gendry-$IMAGE_TAG
       - export ARTIFACT_FILE=gendry-$(go env GOOS)-$(go env GOARCH).tar.gz
       - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
       - docker pull golang:latest
@@ -41,3 +43,12 @@ jobs:
       - mv $ARTIFACT_FILE ./gendry.tar.gz
       - docker build -t dadleyy/gendry:$IMAGE_TAG -f ./auto/docker/Dockerfile .
       - docker push dadleyy/gendry:$IMAGE_TAG
+      - wget https://hyper-install.s3.amazonaws.com/hyper-linux-x86_64.tar.gz
+      - tar xvzf hyper-linux-x86_64.tar.gz
+      - ./hyper config --accesskey=$HYPER_ACCESS_KEY --secretkey=$HYPER_SECRET_KEY --default-region=us-west-1
+      - ./hyper ps -a
+      - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper fip detach || echo ""
+      - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper stop || echo ""
+      - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper rm || echo ""
+      - ./hyper run -d --name $CONTAINER_NAME -p 80:80 $IMAGE_NAME -address=0.0.0.0:80
+      - ./hyper fip attach gendry-prod $CONTAINER_NAME
