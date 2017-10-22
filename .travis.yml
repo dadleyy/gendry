@@ -4,6 +4,9 @@ group: stable
 sudo: true
 dist: trusty
 go: 1.9
+stages:
+  - name: build image
+    if: tag
 jobs:
   include:
   - stage: test
