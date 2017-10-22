@@ -26,4 +26,4 @@ jobs:
   - stage: build image
     go: 1.9
     script:
-      - echo "building img"
+      - docker pull golang:latest
