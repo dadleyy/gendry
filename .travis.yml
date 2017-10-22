@@ -35,7 +35,9 @@ jobs:
     script:
       - export IMAGE_TAG=$(git rev-parse --short HEAD)
       - export ARTIFACT_FILE=gendry-$(go env GOOS)-$(go env GOARCH).tar.gz
+      - docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
       - docker pull golang:latest
       - wget https://github.com/dadleyy/gendry/releases/download/$TRAVIS_TAG/$ARTIFACT_FILE
       - mv $ARTIFACT_FILE ./gendry.tar.gz
       - docker build -t dadleyy/gendry:$IMAGE_TAG -f ./auto/docker/Dockerfile .
+      - docker push dadleyy/gendry:$IMAGE_TAG
