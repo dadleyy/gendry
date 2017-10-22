@@ -21,6 +21,7 @@ jobs:
       - make EXE=./dist/gendry/bin/gendry
       - tar -czvf ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz -C ./dist/gendry ./
     deploy:
+      skip_cleanup: true
       provider: releases
       api_key:
         secure: mTqpA9UBwRC1pPrI/M0zPwZHMNP/FFv7+oLhR2dQG/11yPdQdCH/UeOPNWBjDEbshyYh77O3of3lKvTucC4GaI6Cpgz4fEzrRhNtwnA6lF4Na6FNc/qwmF9sHCxxaxuADqDZq8R9MDrythEEFS3RCoS6eGDcd9S0ZLm0pjnwnm+UsC0nk+oLRnqf1ycxYmh6ZxRWPSv6fs9Pn+9TjULZHFX7wyPsc7P06ES+kRtA0kQI/brEf73Z1qF8KTzjHg4sRuorTi6sJbjlQe9rTudsXLe3z4w++ku/vXBTuUVRkHzr0kf/ApuKp2Agy6vHAnEL72LfYjIkA3XamZlpbLc/QNC07sNbCn8ita0a9wGgBwlalhAtbMfD4bYce4JYklkDQk7Q165h0iQL/gTxqfF/XhEu80Jh+XWGPF1480bujifZ9b4vVv3nqjjoJenkc4+vmvyHUjkaSpMjyFdxK6bm4qbrVmkIeqp67XQNVXtxYCi0oSzOtwl//hhy4ZMi9yzIirHw9Iy2XZp28ORK/8hsIG4/8thuoJkxQiS/KOC2swAku91xaOtXdcWE6ipnRm49r+GMrrCLSSP3u5NrbAAyoJlPsGEpUTR7EUIUQVgA5qBokipiP14bvVb0VibSUrm4I+XCU51LHjlhLobv8ofYrKgx9fVJKH00DFDQka2bBYM=
