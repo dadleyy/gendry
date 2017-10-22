@@ -15,3 +15,7 @@ jobs:
     script:
       - make EXE=./dist/bin/gendry
       - tar -czvf ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz -C ./dist ./
+  - stage: build image
+    go: 1.9
+    script:
+      - echo "building img"
