@@ -14,7 +14,7 @@ jobs:
     go: 1.9
     script:
       - make EXE=./dist/gendry/bin/gendry
-      - tar -czvf ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz -C ./dist/gendry
+      - tar -czvf ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz -C ./dist/gendry ./
     deploy:
       provider: releases
       api_key:
