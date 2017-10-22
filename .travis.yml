@@ -8,7 +8,7 @@ stages:
   - test
   - compile
   - name: image
-    if: tag
+    if: tag IS present
 jobs:
   include:
   - stage: test
