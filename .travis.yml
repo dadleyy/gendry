@@ -5,7 +5,9 @@ sudo: true
 dist: trusty
 go: 1.9
 stages:
-  - name: build image
+  - test
+  - compile
+  - name: image
     if: tag
 jobs:
   include:
@@ -13,7 +15,7 @@ jobs:
     go: 1.9
     script:
       - make test
-  - stage: compile binary
+  - stage: compile
     go: 1.9
     script:
       - make EXE=./dist/gendry/bin/gendry
@@ -26,7 +28,7 @@ jobs:
       on:
         repo: dadleyy/gendry
         tags: true
-  - stage: build image
+  - stage: image
     go: 1.9
     script:
       - docker pull golang:latest
