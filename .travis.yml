@@ -5,20 +5,16 @@ sudo: true
 dist: trusty
 go: 1.9
 stages:
-  - test
-  - compile
-  - name: image
+  - build
+  - name: deploy
     if: tag IS present
 jobs:
   include:
-  - stage: test
-    go: 1.9
-    script:
-      - make test
-  - stage: compile
+  - stage: build
     go: 1.9
     script:
       - make EXE=./dist/gendry/bin/gendry
+      - make test
       - tar -czvf ./dist/gendry-$(go env GOOS)-$(go env GOARCH).tar.gz -C ./dist/gendry ./
     deploy:
       skip_cleanup: true
@@ -30,7 +26,7 @@ jobs:
       on:
         repo: dadleyy/gendry
         tags: true
-  - stage: image
+  - stage: deploy
     go: 1.9
     script:
       - export IMAGE_TAG=$(git rev-parse --short HEAD)
