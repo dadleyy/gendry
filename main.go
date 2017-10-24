@@ -28,6 +28,81 @@ type server struct {
 	reportHome    string
 	shieldText    string
 	cacheDuration int
+	routes        *routeList
+}
+
+type action func(http.ResponseWriter, *http.Request, url.Values)
+
+type route interface {
+	get(http.ResponseWriter, *http.Request, url.Values)
+	post(http.ResponseWriter, *http.Request, url.Values)
+}
+
+type routeList map[*regexp.Regexp]route
+
+func (l *routeList) add(routePath *regexp.Regexp, routeHandler route) error {
+	if l == nil {
+		return fmt.Errorf("invalid-list")
+	}
+
+	(*l)[routePath] = routeHandler
+	return nil
+}
+
+func (l *routeList) actionFor(method string, r route) action {
+	switch strings.ToUpper(method) {
+	case "POST":
+		return r.post
+	default:
+		return r.get
+	}
+}
+
+func (l *routeList) Match(request *http.Request) (action, url.Values, bool) {
+	path := []byte(request.URL.EscapedPath())
+
+	if l == nil {
+		return nil, nil, false
+	}
+
+	for re, handler := range *l {
+		if match := re.Match(path); match != true {
+			continue
+		}
+
+		if s := re.NumSubexp(); s == 0 {
+			return l.actionFor(request.Method, handler), make(url.Values), true
+		}
+
+		groups := re.FindAllStringSubmatch(string(path), -1)
+		names := re.SubexpNames()
+
+		if groups == nil || len(groups) != 1 {
+			return l.actionFor(request.Method, handler), make(url.Values), true
+		}
+
+		values := groups[0][1:]
+		params := make(url.Values)
+		count := len(names)
+
+		if count >= 0 {
+			names = names[1:]
+			count = len(names)
+		}
+
+		for indx, v := range values {
+			if indx < count && len(names[indx]) >= 1 {
+				params.Set(names[indx], v)
+				continue
+			}
+
+			params.Set(fmt.Sprintf("$%d", indx), v)
+		}
+
+		return l.actionFor(request.Method, handler), params, true
+	}
+
+	return nil, nil, false
 }
 
 type reportProfile struct {
@@ -36,14 +111,29 @@ type reportProfile struct {
 	mode     string
 }
 
-func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Request) {
+type routeWith404 struct {
+}
+
+func (route *routeWith404) post(responseWriter http.ResponseWriter, request *http.Request, params url.Values) {
+	responseWriter.WriteHeader(404)
+}
+
+type badgeAPI struct {
+	routeWith404
+	reportHome    string
+	shieldText    string
+	cacheDuration int
+}
+
+func (api *badgeAPI) get(responseWriter http.ResponseWriter, request *http.Request, params url.Values) {
+	log.Printf("matched badge route, params: %v", params)
 	reportName := "latest"
 
 	if commit := request.URL.Query().Get("commit"); commit != "" {
 		reportName = commit
 	}
 
-	reportURL := fmt.Sprintf("%s/%s", s.reportHome, path.Join(reportName, "library.coverage.txt"))
+	reportURL := fmt.Sprintf("%s/%s", api.reportHome, path.Join(reportName, "library.coverage.txt"))
 	r, e := http.Get(reportURL)
 
 	if e != nil {
@@ -68,7 +158,7 @@ func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Req
 		color = "green"
 	}
 
-	escapedConfig := url.PathEscape(fmt.Sprintf(shieldConfigTemplate, s.shieldText, report.coverage, color))
+	escapedConfig := url.PathEscape(fmt.Sprintf(shieldConfigTemplate, api.shieldText, report.coverage, color))
 	shieldURL, e := url.Parse(fmt.Sprintf(shieldURLTemplate, escapedConfig))
 
 	if e != nil {
@@ -108,9 +198,9 @@ func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Req
 
 	defer shieldResponse.Body.Close()
 
-	cacheValue := fmt.Sprintf("max-age=%d", s.cacheDuration)
+	cacheValue := fmt.Sprintf("max-age=%d", api.cacheDuration)
 
-	if s.cacheDuration < 0 {
+	if api.cacheDuration < 0 {
 		cacheValue = "no-cache"
 	}
 
@@ -118,6 +208,18 @@ func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Req
 	responseWriter.Header().Set("Content-Type", "image/svg+xml")
 	responseWriter.WriteHeader(200)
 	io.Copy(responseWriter, shieldResponse.Body)
+}
+
+func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Request) {
+	route, params, found := s.routes.Match(request)
+
+	if found {
+		route(responseWriter, request, params)
+		return
+	}
+
+	responseWriter.WriteHeader(404)
+	io.Copy(responseWriter, strings.NewReader("not-found"))
 }
 
 func main() {
@@ -140,13 +242,21 @@ func main() {
 
 	closed := make(chan error)
 
-	go func() {
-		s := &server{
-			reportHome:    options.reportHome,
-			shieldText:    options.shieldText,
-			cacheDuration: options.cacheDuration,
-		}
+	badges := &badgeAPI{
+		reportHome:    options.reportHome,
+		shieldText:    options.shieldText,
+		cacheDuration: options.cacheDuration,
+	}
 
+	routes := &routeList{
+		regexp.MustCompile("^/reports/(.*)/badge.svg"): badges,
+	}
+
+	s := &server{
+		routes: routes,
+	}
+
+	go func() {
 		closed <- http.ListenAndServe(options.address, s)
 	}()
 
@@ -167,7 +277,7 @@ func parseProfiles(r io.Reader) (*reportProfile, error) {
 		line := scanner.Text()
 
 		if mode == "" && !strings.HasPrefix(line, modeIdentifier) {
-			return nil, fmt.Errorf("invalid-report")
+			return nil, fmt.Errorf("invalid-report: [%s]", line)
 		}
 
 		if strings.HasPrefix(line, modeIdentifier) {
@@ -178,7 +288,7 @@ func parseProfiles(r io.Reader) (*reportProfile, error) {
 		match := lineRe.FindStringSubmatch(line)
 
 		if match == nil {
-			return nil, fmt.Errorf("invalid-report")
+			return nil, fmt.Errorf("invalid-report: line[%s]", line)
 		}
 
 		fileName := match[1]
@@ -248,5 +358,4 @@ func atois(strings ...string) ([]int, error) {
 	}
 
 	return results, nil
-
 }

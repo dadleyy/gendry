@@ -12,7 +12,7 @@ LINT_FLAGS=-set_exit_status
 VENDOR_DIR=./vendor
 
 MAIN=./main.go
-$GO_SRC=$(wildcard main.go)
+GO_SRC=$(wildcard ./*.go)
 
 all: $(EXE)
 
