@@ -222,6 +222,10 @@ func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Req
 	io.Copy(responseWriter, strings.NewReader("not-found"))
 }
 
+func (s *server) start(address string, errors chan<- error) {
+	errors <- http.ListenAndServe(address, s)
+}
+
 func main() {
 	options := struct {
 		address       string
@@ -256,9 +260,7 @@ func main() {
 		routes: routes,
 	}
 
-	go func() {
-		closed <- http.ListenAndServe(options.address, s)
-	}()
+	go s.start(options.address, closed)
 
 	log.Printf("server starting on %s", options.address)
 	<-closed
