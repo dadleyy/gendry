@@ -1,6 +1,8 @@
 package gendry
 
+import "io"
 import "fmt"
+import "log"
 import "regexp"
 import "strings"
 import "net/url"
@@ -87,12 +89,16 @@ func (l *RouteList) Match(request *http.Request) (Action, url.Values, bool) {
 type notImplementedRoute struct {
 }
 
-func (r notImplementedRoute) notImplemented(writer http.ResponseWriter) {
+func (r notImplementedRoute) notImplemented(writer http.ResponseWriter, request *http.Request) {
+	log.Printf("not implemented: %s %v", request.Method, request.URL.Path)
 	writer.WriteHeader(501)
+	io.Copy(writer, strings.NewReader("not-implemented"))
 }
 
 func (r notImplementedRoute) Post(writer http.ResponseWriter, request *http.Request, params url.Values) {
+	r.notImplemented(writer, request)
 }
 
 func (r notImplementedRoute) Get(writer http.ResponseWriter, request *http.Request, params url.Values) {
+	r.notImplemented(writer, request)
 }

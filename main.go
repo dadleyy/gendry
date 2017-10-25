@@ -10,12 +10,9 @@ import "github.com/dadleyy/gendry/gendry"
 
 const (
 	defaultReportHome = "http://coverage.marlow.sizethree.cc.s3.amazonaws.com"
-	defaultShieldText = "generated--coverage"
 )
 
 type server struct {
-	reportHome    string
-	shieldText    string
 	cacheDuration int
 	routes        *gendry.RouteList
 }
@@ -40,13 +37,11 @@ func main() {
 	options := struct {
 		address       string
 		reportHome    string
-		shieldText    string
 		cacheDuration int
 	}{}
 
 	flag.StringVar(&options.address, "address", "0.0.0.0:8080", "the address to bind the http listener to")
 	flag.StringVar(&options.reportHome, "report-home", defaultReportHome, "where to look for coverage reports")
-	flag.StringVar(&options.shieldText, "shield-text", defaultShieldText, "text to display next to percentage")
 	flag.IntVar(&options.cacheDuration, "max-cache-age", 10, "amount of seconds for Cache-Control header")
 	flag.Parse()
 
@@ -56,14 +51,13 @@ func main() {
 
 	closed := make(chan error)
 
-	badges := &gendry.BadgeAPI{
-		ReportHome:    options.reportHome,
-		ShieldText:    options.shieldText,
-		CacheDuration: options.cacheDuration,
-	}
+	projects := gendry.NewProjectStore()
+	reports := gendry.NewReportStore()
 
 	routes := &gendry.RouteList{
-		regexp.MustCompile("^/reports/(.*)/badge.svg"): badges,
+		regexp.MustCompile("^/reports/(?P<project>.*)/(?P<tag>.*)/badge.svg"): gendry.NewBadgeAPI(reports),
+		regexp.MustCompile("^/reports"):                                       gendry.NewReportAPI(projects),
+		regexp.MustCompile("^/projects"):                                      gendry.NewProjectAPI(projects),
 	}
 
 	s := &server{
