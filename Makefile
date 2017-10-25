@@ -12,7 +12,8 @@ LINT_FLAGS=-set_exit_status
 VENDOR_DIR=./vendor
 
 MAIN=./main.go
-GO_SRC=$(wildcard ./*.go)
+
+GO_SRC=$(wildcard ./*.go ./gendry/*.go)
 
 all: $(EXE)
 
@@ -23,7 +24,9 @@ test: $(VENDOR_DIR)
 	$(GO) vet $(MAIN)
 	$(GOLINT) $(LINT_FLAGS) $(MAIN)
 	$(MISSPELL) -error $(MAIN)
-	$(GO) test $(TEST_FLAGS) ./...
+	$(GOLINT) $(LINT_FLAGS) ./gendry/...
+	$(GO) vet ./gendry/...
+	$(GO) test $(TEST_FLAGS) ./gendry/...
 
 $(VENDOR_DIR):
 	$(GO) get -v -u github.com/golang/lint/golint
