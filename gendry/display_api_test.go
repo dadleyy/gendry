@@ -3,14 +3,14 @@ package gendry
 import "testing"
 import "github.com/franela/goblin"
 
-func Test_BadgeAPI(t *testing.T) {
+func Test_DisplayAPI(t *testing.T) {
 	g := goblin.Goblin(t)
 
-	g.Describe("BadgeAPI", func() {
-		var api *badgeAPI
+	g.Describe("DisplayAPI", func() {
+		var api *displayAPI
 
 		g.BeforeEach(func() {
-			api = &badgeAPI{}
+			api = &displayAPI{}
 		})
 	})
 }

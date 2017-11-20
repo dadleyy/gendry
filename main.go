@@ -116,10 +116,10 @@ func main() {
 
 	defer db.Close()
 
-	badgeEndpoint := regexp.MustCompile("^/reports/(?P<project>.*)/(?P<tag>.*)/badge.svg")
+	badgeEndpoint := regexp.MustCompile(constants.DisplayAPIRegex)
 
 	routes := &gendry.RouteList{
-		badgeEndpoint:                    gendry.NewBadgeAPI(),
+		badgeEndpoint:                    gendry.NewDisplayAPI(),
 		regexp.MustCompile("^/reports"):  gendry.NewReportAPI(rs, ps, fs),
 		regexp.MustCompile("^/projects"): gendry.NewProjectAPI(ps),
 	}
