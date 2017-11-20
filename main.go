@@ -1,13 +1,17 @@
 package main
 
+import "os"
 import "log"
 import "fmt"
 import "flag"
 import "regexp"
+import "net/url"
 import "database/sql"
+import "github.com/joho/godotenv"
 import "github.com/go-sql-driver/mysql"
 import "github.com/dadleyy/gendry/gendry"
 import "github.com/dadleyy/gendry/gendry/models"
+import "github.com/dadleyy/gendry/gendry/constants"
 
 const (
 	defaultReportHome  = "http://coverage.marlow.sizethree.cc.s3.amazonaws.com"
@@ -29,6 +33,10 @@ type cliOptions struct {
 	databasePort     string
 	databaseName     string
 	databaseSSL      string
+	awsAccessKeyID   string
+	awsAccessKey     string
+	awsAccessToken   string
+	awsBucketName    string
 }
 
 func (o *cliOptions) ConnectionString() string {
@@ -45,6 +53,7 @@ func (o *cliOptions) ConnectionString() string {
 }
 
 func main() {
+	godotenv.Load()
 	options := cliOptions{}
 
 	flag.StringVar(&options.address, "address", "0.0.0.0:8080", "the address to bind the http listener to")
@@ -56,10 +65,22 @@ func main() {
 	flag.StringVar(&options.databasePort, "db-port", defaultDatbasePort, "port where mysql is running")
 	flag.StringVar(&options.databaseName, "db-name", defaultDatbaseName, "the database name to connect to")
 	flag.StringVar(&options.databaseSSL, "db-ssl", "disable", "enable database ssl")
+	flag.StringVar(&options.awsAccessKeyID, "aws-access-key-id", "", "aws access key id")
+	flag.StringVar(&options.awsAccessKey, "aws-access-key", "", "aws access key")
+	flag.StringVar(&options.awsAccessToken, "aws-access-token", "", "aws access token")
+	flag.StringVar(&options.awsBucketName, "aws-bucket-name", "", "aws access token")
 	flag.Parse()
 
 	if options.address == "" {
 		log.Fatal("invalid address")
+	}
+
+	if key := os.Getenv(constants.AWSAccessKeyIDEnvVariable); key != "" {
+		options.awsAccessKeyID = key
+	}
+
+	if key := os.Getenv(constants.AWSAccessKeyEnvVariable); key != "" {
+		options.awsAccessKey = key
 	}
 
 	config := mysql.Config{
@@ -81,16 +102,26 @@ func main() {
 	}
 
 	closed := make(chan error)
+	fileStoreConfig := &url.Values{
+		constants.AWSAccessKeyEnvVariable:   []string{options.awsAccessKey},
+		constants.AWSAccessTokenEnvVariable: []string{options.awsAccessToken},
+		constants.AWSAccessKeyIDEnvVariable: []string{options.awsAccessKeyID},
+		constants.AWSBucketNameEnvVariable:  []string{options.awsBucketName},
+	}
 
 	ps := models.NewProjectStore(db)
 	rs := models.NewReportStore(db)
 
+	fs := gendry.NewFileStore("s3", fileStoreConfig, db)
+
 	defer db.Close()
 
+	badgeEndpoint := regexp.MustCompile("^/reports/(?P<project>.*)/(?P<tag>.*)/badge.svg")
+
 	routes := &gendry.RouteList{
-		regexp.MustCompile("^/reports/(?P<project>.*)/(?P<tag>.*)/badge.svg"): gendry.NewBadgeAPI(),
-		regexp.MustCompile("^/reports"):                                       gendry.NewReportAPI(rs, ps),
-		regexp.MustCompile("^/projects"):                                      gendry.NewProjectAPI(ps),
+		badgeEndpoint:                    gendry.NewBadgeAPI(),
+		regexp.MustCompile("^/reports"):  gendry.NewReportAPI(rs, ps, fs),
+		regexp.MustCompile("^/projects"): gendry.NewProjectAPI(ps),
 	}
 
 	runtime := gendry.NewRuntime(routes)
