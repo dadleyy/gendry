@@ -7,13 +7,13 @@ EXE=./dist/bin/gendry
 
 LDFLAGS="-s -w"
 BUILD_FLAGS=-x -v -ldflags $(LDFLAGS)
-TEST_FLAGS=-v -coverprofile=coverage.txt -covermode=atomic
+TEST_FLAGS=-v -covermode=atomic
 LINT_FLAGS=-set_exit_status
 VENDOR_DIR=./vendor
 
 MAIN=./main.go
 
-GO_SRC=$(wildcard ./*.go ./gendry/*.go)
+GO_SRC=$(wildcard ./gendry/*.go)
 MODEL_SRC=$(filter-out %.marlow.go, $(wildcard ./gendry/models/*.go))
 MODEL_OBJS=$(patsubst %.go,%.marlow.go,$(MODEL_SRC))
 
@@ -29,8 +29,8 @@ test: $(VENDOR_DIR)
 	$(GO) vet $(MAIN)
 	$(GOLINT) $(LINT_FLAGS) $(MAIN)
 	$(MISSPELL) -error $(MAIN)
-	$(GOLINT) $(LINT_FLAGS) ./gendry/...
-	$(GO) vet ./gendry/...
+	$(GOLINT) $(LINT_FLAGS) $(GO_SRC)
+	$(GO) vet $(GO_SRC)
 	$(GO) test $(TEST_FLAGS) ./gendry/...
 
 $(VENDOR_DIR):

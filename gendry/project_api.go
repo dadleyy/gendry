@@ -1,7 +1,8 @@
 package gendry
 
+import "io"
 import "log"
-import "fmt"
+import "bytes"
 import "net/url"
 import "net/http"
 import "encoding/json"
@@ -15,6 +16,7 @@ func NewProjectAPI(store models.ProjectStore) APIEndpoint {
 
 type projectAPI struct {
 	notImplementedRoute
+	jsonResponder
 	store models.ProjectStore
 }
 
@@ -26,8 +28,7 @@ func (a *projectAPI) Post(writer http.ResponseWriter, request *http.Request, par
 	}{}
 
 	if e := decoder.Decode(&project); e != nil {
-		writer.WriteHeader(422)
-		fmt.Fprintf(writer, "invalid project")
+		a.error(writer, "invalid-project")
 		return
 	}
 
@@ -37,39 +38,41 @@ func (a *projectAPI) Post(writer http.ResponseWriter, request *http.Request, par
 
 	if e != nil {
 		log.Printf("invalid count: %s", e.Error())
-		writer.WriteHeader(500)
-		fmt.Fprintf(writer, "server error")
+		a.error(writer, "invalid-project")
 		return
 	}
 
 	if c != 0 {
 		log.Printf("duplicate project: %s", project.Name)
-		writer.WriteHeader(422)
-		fmt.Fprintf(writer, "invalid project")
+		a.error(writer, "invalid-project")
 		return
 	}
 
 	systemID := uuid.NewV4().String()
+	token := a.generateToken()
 
 	id, e := a.store.CreateProjects(models.Project{
 		Name:     project.Name,
 		SystemID: systemID,
+		Token:    token,
 	})
 
 	if e != nil {
 		log.Printf("unable to create project: %s", e.Error())
-		writer.WriteHeader(422)
-		fmt.Fprintf(writer, "invalid project")
+		a.error(writer, "invalid-project")
 		return
 	}
 
-	writer.Header().Set("Content-Type", "application/json")
-
-	output := json.NewEncoder(writer)
-
-	output.Encode(&struct {
+	a.success(writer, struct {
 		ID       int64  `json:"id"`
-		Name     string `json:"name"`
 		SystemID string `json:"system_id"`
-	}{id, project.Name, systemID})
+		Token    string `json:"token"`
+		Name     string `json:"name"`
+	}{id, systemID, token, project.Name})
+}
+
+func (a *projectAPI) generateToken() string {
+	output := new(bytes.Buffer)
+	io.Copy(output, newTokenGenerator(20))
+	return output.String()
 }

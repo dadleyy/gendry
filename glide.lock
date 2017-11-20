@@ -1,6 +1,10 @@
-hash: 094328afa0bdb799b732431581e2d2f46ca8699e4e9c71cc97cefa9c369cd27b
-updated: 2017-11-13T18:26:38.672011549-05:00
+hash: e5a71fcd7e77761fb1565182eb511a8a59b6d18409ad729dd1c23176717b1110
+updated: 2017-11-20T12:10:55.350416433-05:00
 imports:
+- name: github.com/dadleyy/marlow
+  version: 3c207c642f7ea7b68e040d77fda7e89924edaeb3
+  subpackages:
+  - marlowc
 - name: github.com/franela/goblin
   version: 74c9fe110d4bfd04c222a089a309e0a97e258534
 - name: github.com/go-sql-driver/mysql

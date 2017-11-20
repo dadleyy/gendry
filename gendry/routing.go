@@ -1,6 +1,5 @@
 package gendry
 
-import "io"
 import "fmt"
 import "log"
 import "regexp"
@@ -8,7 +7,7 @@ import "strings"
 import "net/url"
 import "net/http"
 
-// Action types represent a single http request handler, where the last url.Values parameter contains path params.
+// Action types represent a single http request handler, wearere the last url.Values parameter contains path params.
 type Action func(http.ResponseWriter, *http.Request, url.Values)
 
 // APIEndpoint represents a single route that is can respond to various HTTP methods.
@@ -86,13 +85,17 @@ func (l *RouteList) Match(request *http.Request) (Action, url.Values, bool) {
 	return nil, nil, false
 }
 
+type jsonResponse struct {
+	Errors []string `json:"errors"`
+}
+
 type notImplementedRoute struct {
 }
 
 func (r notImplementedRoute) notImplemented(writer http.ResponseWriter, request *http.Request) {
 	log.Printf("not implemented: %s %v", request.Method, request.URL.Path)
-	writer.WriteHeader(501)
-	io.Copy(writer, strings.NewReader("not-implemented"))
+	writer.WriteHeader(400)
+	fmt.Fprintf(writer, "not-implemented")
 }
 
 func (r notImplementedRoute) Post(writer http.ResponseWriter, request *http.Request, params url.Values) {

@@ -1,12 +1,9 @@
 package main
 
-import "io"
 import "log"
 import "fmt"
 import "flag"
 import "regexp"
-import "strings"
-import "net/http"
 import "database/sql"
 import "github.com/go-sql-driver/mysql"
 import "github.com/dadleyy/gendry/gendry"
@@ -21,28 +18,6 @@ const (
 	defaultDatbaseHost = "0.0.0.0"
 	defaultDatbasePort = "3306"
 )
-
-type server struct {
-	cacheDuration int
-	routes        *gendry.RouteList
-}
-
-func (s *server) ServeHTTP(responseWriter http.ResponseWriter, request *http.Request) {
-	route, params, found := s.routes.Match(request)
-
-	if found {
-		route(responseWriter, request, params)
-		return
-	}
-
-	log.Printf("not found: %v", request.URL)
-	responseWriter.WriteHeader(404)
-	io.Copy(responseWriter, strings.NewReader("not-found"))
-}
-
-func (s *server) start(address string, errors chan<- error) {
-	errors <- http.ListenAndServe(address, s)
-}
 
 type cliOptions struct {
 	address          string
@@ -118,11 +93,9 @@ func main() {
 		regexp.MustCompile("^/projects"):                                      gendry.NewProjectAPI(ps),
 	}
 
-	s := &server{
-		routes: routes,
-	}
+	runtime := gendry.NewRuntime(routes)
 
-	go s.start(options.address, closed)
+	go runtime.Start(options.address, closed)
 
 	log.Printf("server starting on %s", options.address)
 	<-closed
