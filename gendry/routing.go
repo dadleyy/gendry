@@ -45,13 +45,16 @@ func (l *RouteList) Match(request *http.Request) (Action, url.Values, bool) {
 		return nil, nil, false
 	}
 
+	var fallback Action
+
 	for re, handler := range *l {
 		if match := re.Match(path); match != true {
 			continue
 		}
 
 		if s := re.NumSubexp(); s == 0 {
-			return l.actionFor(request.Method, handler), make(url.Values), true
+			fallback = l.actionFor(request.Method, handler)
+			continue
 		}
 
 		groups := re.FindAllStringSubmatch(string(path), -1)
@@ -80,6 +83,10 @@ func (l *RouteList) Match(request *http.Request) (Action, url.Values, bool) {
 		}
 
 		return l.actionFor(request.Method, handler), params, true
+	}
+
+	if fallback != nil {
+		return fallback, make(url.Values), true
 	}
 
 	return nil, nil, false

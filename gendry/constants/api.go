@@ -12,4 +12,7 @@ const (
 
 	// ReportFileBodyParam is the body param key that will be used to load files for a given report.
 	ReportFileBodyParam = "files"
+
+	// ShieldTextQueryParam is used as a query param key that, if provided, will determine which text to display.
+	ShieldTextQueryParam = "text"
 )

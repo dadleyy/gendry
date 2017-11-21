@@ -119,7 +119,7 @@ func main() {
 	badgeEndpoint := regexp.MustCompile(constants.DisplayAPIRegex)
 
 	routes := &gendry.RouteList{
-		badgeEndpoint:                    gendry.NewDisplayAPI(),
+		badgeEndpoint:                    gendry.NewDisplayAPI(rs, ps, fs),
 		regexp.MustCompile("^/reports"):  gendry.NewReportAPI(rs, ps, fs),
 		regexp.MustCompile("^/projects"): gendry.NewProjectAPI(ps),
 	}

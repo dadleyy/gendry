@@ -1,8 +1,10 @@
 package gendry
 
 import "io"
+import "log"
 import "fmt"
 import "path"
+import "bytes"
 import "net/url"
 import "database/sql"
 import "github.com/satori/go.uuid"
@@ -60,28 +62,7 @@ type s3store struct {
 }
 
 func (s *s3store) NewFile(contentType string, directory string) (string, io.WriteCloser, error) {
-	creds := credentials.NewStaticCredentials(s.accessID, s.accessKey, s.accessToken)
-
-	if _, e := creds.Get(); e != nil {
-		return "", nil, fmt.Errorf("invalid-credentials")
-	}
-
-	region := s.region
-
-	if region == "" {
-		region = "us-east-1"
-	}
-
-	config := aws.NewConfig().WithRegion(region).WithCredentials(creds)
-	client := s3.New(session.New(), config)
-
-	if _, e := client.ListObjects(&s3.ListObjectsInput{Bucket: &s.bucketName}); e != nil {
-		return "", nil, e
-	}
-
-	uploadSession, e := session.NewSessionWithOptions(session.Options{
-		Config: *config,
-	})
+	uploadSession, e := s.newSession()
 
 	if e != nil {
 		return "", nil, e
@@ -131,6 +112,51 @@ func (s *s3store) NewFile(contentType string, directory string) (string, io.Writ
 	return id, pw, nil
 }
 
-func (s *s3store) FindFile(systemID string) (io.ReadCloser, error) {
-	return nil, fmt.Errorf("not-implemented")
+func (s *s3store) FindFile(filepath string) (io.ReadCloser, error) {
+	downloadSession, e := s.newSession()
+
+	if e != nil {
+		return nil, e
+	}
+
+	downloader := s3manager.NewDownloader(downloadSession)
+	pr, pw := io.Pipe()
+
+	go func() {
+		buffer := make([]byte, 0, constants.MaxHTMLReportFileSize)
+		writer := aws.NewWriteAtBuffer(buffer)
+		_, e := downloader.Download(writer, &s3.GetObjectInput{
+			Bucket: aws.String(s.bucketName),
+			Key:    aws.String(filepath),
+		})
+
+		if e != nil {
+			log.Printf("unable to download from s3: %s", e)
+			pw.CloseWithError(e)
+			return
+		}
+
+		_, e = io.Copy(pw, bytes.NewBuffer(writer.Bytes()))
+		pw.CloseWithError(e)
+	}()
+
+	return pr, nil
+}
+
+func (s *s3store) newSession() (*session.Session, error) {
+	creds := credentials.NewStaticCredentials(s.accessID, s.accessKey, s.accessToken)
+
+	if _, e := creds.Get(); e != nil {
+		return nil, e
+	}
+
+	region := s.region
+
+	if region == "" {
+		region = "us-east-1"
+	}
+
+	config := aws.NewConfig().WithRegion(region).WithCredentials(creds)
+
+	return session.NewSessionWithOptions(session.Options{Config: *config})
 }
