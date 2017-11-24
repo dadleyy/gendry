@@ -55,6 +55,8 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 
 	target := request.URL.Query().Get(constants.ProjectIDParamName)
 
+	paging := a.paging(request)
+
 	blueprint := &models.ProjectBlueprint{
 		SystemID: []string{target},
 	}
@@ -76,9 +78,21 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 		return
 	}
 
-	reports, e := a.reports.FindReports(&models.ReportBlueprint{
+	bp := &models.ReportBlueprint{
 		ProjectID: []string{matches[0].SystemID},
-	})
+		Limit:     paging.limit,
+		Offset:    paging.offset,
+	}
+
+	reports, e := a.reports.FindReports(bp)
+
+	if e != nil {
+		log.Printf("unable to find reports for project %s (error %v)", matches[0].SystemID, e)
+		a.error(writer, "server-error")
+		return
+	}
+
+	paging.total, e = a.reports.CountReports(bp)
 
 	if e != nil {
 		log.Printf("unable to find reports for project %s (error %v)", matches[0].SystemID, e)
@@ -99,7 +113,7 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 		}{r.ID, r.SystemID, r.HTMLFileID, r.ProjectID, r.Tag, r.Coverage}
 	}
 
-	a.success(writer, results...)
+	a.success(writer, append(results, paging)...)
 }
 
 func (a *reportAPI) Delete(writer http.ResponseWriter, request *http.Request, params url.Values) {
@@ -319,4 +333,18 @@ func (a *reportAPI) parseReportForm(form *multipart.Form) (*reportFiles, error) 
 	}
 
 	return result, nil
+}
+
+func (a *reportAPI) paging(request *http.Request) pagingInfo {
+	paging := pagingInfo{limit: 10, offset: 0}
+
+	if offset, e := strconv.Atoi(request.URL.Query().Get(constants.OffsetParamName)); e == nil {
+		paging.offset = offset
+	}
+
+	if limit, e := strconv.Atoi(request.URL.Query().Get(constants.LimitParamName)); e == nil {
+		paging.limit = limit
+	}
+
+	return paging
 }

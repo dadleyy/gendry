@@ -10,6 +10,12 @@ const (
 	// ProjectIDParamName is used as the key wherever a project id is expected.
 	ProjectIDParamName = "project_id"
 
+	// OffsetParamName is used as the key used by clients to specify offset.
+	OffsetParamName = "offset"
+
+	// LimitParamName is used as the key used by clients to specific limit.
+	LimitParamName = "limit"
+
 	// ReportIDParamName is used as the key wherever a report id is expected.
 	ReportIDParamName = "report_id"
 
