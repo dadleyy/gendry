@@ -83,6 +83,10 @@ func main() {
 		options.awsAccessKey = key
 	}
 
+	if bucket := os.Getenv(constants.AWSBucketNameEnvVariable); bucket != "" {
+		options.awsBucketName = bucket
+	}
+
 	config := mysql.Config{
 		User:   options.databaseUsername,
 		Passwd: options.databasePassword,

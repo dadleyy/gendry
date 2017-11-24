@@ -14,6 +14,7 @@ type Action func(http.ResponseWriter, *http.Request, url.Values)
 type APIEndpoint interface {
 	Get(http.ResponseWriter, *http.Request, url.Values)
 	Post(http.ResponseWriter, *http.Request, url.Values)
+	Delete(http.ResponseWriter, *http.Request, url.Values)
 }
 
 // RouteList is map of path expressions and their endpoints; matches an incoming request to a single action.
@@ -23,6 +24,8 @@ func (l *RouteList) actionFor(method string, endpoint APIEndpoint) Action {
 	switch strings.ToUpper(method) {
 	case "POST":
 		return endpoint.Post
+	case "DELETE":
+		return endpoint.Delete
 	default:
 		return endpoint.Get
 	}
@@ -103,6 +106,10 @@ func (r notImplementedRoute) notImplemented(writer http.ResponseWriter, request 
 	log.Printf("not implemented: %s %v", request.Method, request.URL.Path)
 	writer.WriteHeader(400)
 	fmt.Fprintf(writer, "not-implemented")
+}
+
+func (r notImplementedRoute) Delete(writer http.ResponseWriter, request *http.Request, params url.Values) {
+	r.notImplemented(writer, request)
 }
 
 func (r notImplementedRoute) Post(writer http.ResponseWriter, request *http.Request, params url.Values) {

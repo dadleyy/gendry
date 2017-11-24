@@ -14,6 +14,9 @@ type testRoute struct {
 	params []url.Values
 }
 
+func (r *testRoute) Delete(writer http.ResponseWriter, request *http.Request, params url.Values) {
+}
+
 func (r *testRoute) Get(writer http.ResponseWriter, request *http.Request, params url.Values) {
 	r.respond(writer, request, params)
 }
