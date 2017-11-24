@@ -4,6 +4,7 @@ import "io"
 import "log"
 import "fmt"
 import "path"
+import "strconv"
 import "net/url"
 import "net/http"
 import "mime/multipart"
@@ -43,6 +44,86 @@ type reportFiles struct {
 	coverage *reportProfile
 }
 
+func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, params url.Values) {
+	project, e := a.project(request)
+
+	if e != nil {
+		log.Printf("unable to find project (error %s)", e.Error())
+		a.error(writer, "invalid-project")
+		return
+	}
+
+	target := request.URL.Query().Get(constants.ProjectIDParamName)
+
+	blueprint := &models.ProjectBlueprint{
+		SystemID: []string{target},
+	}
+
+	if internal, e := strconv.Atoi(target); e == nil {
+		blueprint.ID = []uint{uint(internal)}
+		blueprint.Inclusive = true
+	}
+
+	matches, e := a.projects.FindProjects(blueprint)
+
+	if e != nil || len(matches) != 1 {
+		a.error(writer, "not-found")
+		return
+	}
+
+	if matches[0].SystemID != project.SystemID {
+		a.error(writer, "invalid-project")
+		return
+	}
+
+	reports, e := a.reports.FindReports(&models.ReportBlueprint{
+		ProjectID: []string{matches[0].SystemID},
+	})
+
+	if e != nil {
+		log.Printf("unable to find reports for project %s (error %v)", matches[0].SystemID, e)
+		a.error(writer, "server-error")
+		return
+	}
+
+	results := make([]interface{}, len(reports))
+
+	for i, r := range reports {
+		results[i] = struct {
+			ID         uint    `json:"id"`
+			SystemID   string  `json:"system_id"`
+			HTMLFileID string  `json:"html_field_id"`
+			ProjectID  string  `json:"project_id"`
+			Tag        string  `json:"tag"`
+			Coverage   float64 `json:"coverage"`
+		}{r.ID, r.SystemID, r.HTMLFileID, r.ProjectID, r.Tag, r.Coverage}
+	}
+
+	a.success(writer, results...)
+}
+
+func (a *reportAPI) Delete(writer http.ResponseWriter, request *http.Request, params url.Values) {
+	report, e := a.authorizeLookup(request)
+
+	if e != nil {
+		log.Printf("unauthorized attempt (error %v)", e)
+		a.error(writer, "invalid-report")
+		return
+	}
+
+	blueprint := &models.ReportBlueprint{
+		SystemID: []string{report.SystemID},
+	}
+
+	if _, e := a.reports.DeleteReports(blueprint); e != nil {
+		log.Printf("unable to delete report (error %v)", e)
+		a.error(writer, "server-error")
+		return
+	}
+
+	a.success(writer, nil)
+}
+
 func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, params url.Values) {
 	projectToken := request.Header.Get(constants.ProjectAuthTokenAPIHeader)
 
@@ -77,6 +158,7 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 	reports, e := a.parseReportForm(request.MultipartForm)
 
 	if e != nil {
+		log.Printf("unable to parse request body for creating report in project %s (error %v)", projectID, e)
 		a.error(writer, e.Error())
 		return
 	}
@@ -120,6 +202,53 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 		Coverage   float64 `json:"coverage"`
 		ProjectID  string  `json:"project_id"`
 	}{primaryIDs[0], record.SystemID, record.Tag, record.HTMLFileID, record.Coverage, record.ProjectID})
+}
+
+func (a *reportAPI) project(request *http.Request) (*models.Project, error) {
+	token := request.Header.Get(constants.ProjectAuthTokenAPIHeader)
+	projects, e := a.projects.FindProjects(&models.ProjectBlueprint{Token: []string{token}})
+
+	if e != nil {
+		return nil, e
+	}
+
+	if len(projects) != 1 {
+		return nil, fmt.Errorf("invalid-token")
+	}
+
+	return projects[0], nil
+}
+
+func (a *reportAPI) authorizeLookup(request *http.Request) (*models.Report, error) {
+	token := request.Header.Get(constants.ProjectAuthTokenAPIHeader)
+	projects, e := a.projects.FindProjects(&models.ProjectBlueprint{Token: []string{token}})
+
+	if len(projects) != 1 || e != nil {
+		return nil, fmt.Errorf("invalid-project")
+	}
+
+	id := request.URL.Query().Get(constants.ReportIDParamName)
+
+	blueprint := &models.ReportBlueprint{
+		SystemID: []string{id},
+	}
+
+	if internal, e := strconv.Atoi(id); e == nil {
+		blueprint.ID = []uint{uint(internal)}
+		blueprint.Inclusive = true
+	}
+
+	reports, e := a.reports.FindReports(blueprint)
+
+	if len(reports) != 1 || e != nil {
+		return nil, fmt.Errorf("invalid-report")
+	}
+
+	if reports[0].ProjectID != projects[0].SystemID {
+		return nil, fmt.Errorf("unauthorized")
+	}
+
+	return reports[0], nil
 }
 
 func (a *reportAPI) writeReportHTMLFile(source *multipart.FileHeader) (string, error) {

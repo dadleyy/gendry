@@ -10,6 +10,9 @@ const (
 	// ProjectIDParamName is used as the key wherever a project id is expected.
 	ProjectIDParamName = "project_id"
 
+	// ReportIDParamName is used as the key wherever a report id is expected.
+	ReportIDParamName = "report_id"
+
 	// ReportProjectIDBodyParam is the body param key that will be used as the project id in the report upload request.
 	ReportProjectIDBodyParam = "project_id"
 
