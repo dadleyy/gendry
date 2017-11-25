@@ -139,15 +139,11 @@ func (a *reportAPI) Delete(writer http.ResponseWriter, request *http.Request, pa
 }
 
 func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, params url.Values) {
-	projectToken := request.Header.Get(constants.ProjectAuthTokenAPIHeader)
+	project, e := a.project(request)
 
-	matchingProjects, e := a.projects.FindProjects(&models.ProjectBlueprint{
-		Token: []string{projectToken},
-	})
-
-	if e != nil || len(matchingProjects) == 0 {
-		log.Printf("invalid report request, token[%s], err[%v]", projectToken, e)
-		a.error(writer, "invalid-project")
+	if e != nil {
+		log.Printf("unable to find project (error %v)", e)
+		a.error(writer, "not-found")
 		return
 	}
 
@@ -158,8 +154,8 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 
 	projectID, tag := request.Form.Get("project_id"), request.Form.Get("tag")
 
-	if fmt.Sprintf("%d", matchingProjects[0].ID) != projectID && matchingProjects[0].SystemID != projectID {
-		log.Printf("requested project != authed (request: %s, auth: %d)", projectID, matchingProjects[0].ID)
+	if fmt.Sprintf("%d", project.ID) != projectID && project.SystemID != projectID {
+		log.Printf("requested project != authed (request: %s, auth: %d)", projectID, project.ID)
 		a.error(writer, "invalid-project")
 		return
 	}
@@ -191,7 +187,7 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 		SystemID:   fmt.Sprintf("%s", uuid.NewV4()),
 		HTMLFileID: fileID,
 		Coverage:   reports.coverage.coverage,
-		ProjectID:  matchingProjects[0].SystemID,
+		ProjectID:  project.SystemID,
 		Tag:        tag,
 	}
 
@@ -234,11 +230,10 @@ func (a *reportAPI) project(request *http.Request) (*models.Project, error) {
 }
 
 func (a *reportAPI) authorizeLookup(request *http.Request) (*models.Report, error) {
-	token := request.Header.Get(constants.ProjectAuthTokenAPIHeader)
-	projects, e := a.projects.FindProjects(&models.ProjectBlueprint{Token: []string{token}})
+	project, e := a.project(request)
 
-	if len(projects) != 1 || e != nil {
-		return nil, fmt.Errorf("invalid-project")
+	if e != nil {
+		return nil, e
 	}
 
 	id := request.URL.Query().Get(constants.ReportIDParamName)
@@ -258,7 +253,7 @@ func (a *reportAPI) authorizeLookup(request *http.Request) (*models.Report, erro
 		return nil, fmt.Errorf("invalid-report")
 	}
 
-	if reports[0].ProjectID != projects[0].SystemID {
+	if reports[0].ProjectID != project.SystemID {
 		return nil, fmt.Errorf("unauthorized")
 	}
 
