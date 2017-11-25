@@ -2,6 +2,7 @@ package models
 
 //go:generate marlowc -input ./report.go
 
+// Report records represent a persisted version of a go coverage report (created from txt and html files)
 type Report struct {
 	ID         uint    `marlow:"column=id&autoIncrement=true"`
 	SystemID   string  `marlow:"column=system_id"`
