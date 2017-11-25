@@ -142,7 +142,7 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 	project, e := a.project(request)
 
 	if e != nil {
-		log.Printf("unable to find project (error %v)", e)
+		log.Printf("unable to find project (error %v) (header %v)", e, request.Header)
 		a.error(writer, "not-found")
 		return
 	}
@@ -324,7 +324,7 @@ func (a *reportAPI) parseReportForm(form *multipart.Form) (*reportFiles, error) 
 	}
 
 	if result.coverage == nil || result.html == nil {
-		return nil, fmt.Errorf("invalid-files")
+		return nil, fmt.Errorf("invalid-files %d", len(files))
 	}
 
 	return result, nil
