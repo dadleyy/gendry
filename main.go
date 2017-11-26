@@ -1,7 +1,6 @@
 package main
 
 import "os"
-import "log"
 import "fmt"
 import "flag"
 import "regexp"
@@ -55,6 +54,7 @@ func (o *cliOptions) ConnectionString() string {
 func main() {
 	godotenv.Load()
 	options := cliOptions{}
+	log := gendry.NewLogger(gendry.LogLabel("main"))
 
 	flag.StringVar(&options.address, "address", "0.0.0.0:8080", "the address to bind the http listener to")
 	flag.StringVar(&options.reportHome, "report-home", defaultReportHome, "where to look for coverage reports")
@@ -71,8 +71,11 @@ func main() {
 	flag.StringVar(&options.awsBucketName, "aws-bucket-name", "", "aws access token")
 	flag.Parse()
 
+	log.Infof("hello world")
+
 	if options.address == "" {
-		log.Fatal("invalid address")
+		log.Errorf("invalid address")
+		return
 	}
 
 	if key := os.Getenv(constants.AWSAccessKeyIDEnvVariable); key != "" {
@@ -98,11 +101,13 @@ func main() {
 	db, e := sql.Open("mysql", config.FormatDSN())
 
 	if e != nil {
-		log.Fatalf("unable to connect to database: %s", e.Error())
+		log.Errorf("unable to connect to database: %s", e.Error())
+		return
 	}
 
 	if e := db.Ping(); e != nil {
-		log.Fatalf("unable to connect to database: %s", e.Error())
+		log.Errorf("unable to connect to database: %s", e.Error())
+		return
 	}
 
 	closed := make(chan error)
@@ -132,7 +137,7 @@ func main() {
 
 	go runtime.Start(options.address, closed)
 
-	log.Printf("server starting on %s", options.address)
+	log.Infof("server starting on %s", options.address)
 	<-closed
-	log.Printf("server terminating")
+	log.Infof("server terminating")
 }

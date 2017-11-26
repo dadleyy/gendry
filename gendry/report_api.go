@@ -49,7 +49,7 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 
 	if e != nil {
 		log.Printf("unable to find project (error %s)", e.Error())
-		a.error(writer, "invalid-project")
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
@@ -69,12 +69,12 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 	matches, e := a.projects.FindProjects(blueprint)
 
 	if e != nil || len(matches) != 1 {
-		a.error(writer, "not-found")
+		a.renderError(writer, "not-found")
 		return
 	}
 
 	if matches[0].SystemID != project.SystemID {
-		a.error(writer, "invalid-project")
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
@@ -88,7 +88,7 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 
 	if e != nil {
 		log.Printf("unable to find reports for project %s (error %v)", matches[0].SystemID, e)
-		a.error(writer, "server-error")
+		a.renderError(writer, "server-error")
 		return
 	}
 
@@ -96,7 +96,7 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 
 	if e != nil {
 		log.Printf("unable to find reports for project %s (error %v)", matches[0].SystemID, e)
-		a.error(writer, "server-error")
+		a.renderError(writer, "server-error")
 		return
 	}
 
@@ -113,7 +113,7 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 		}{r.ID, r.SystemID, r.HTMLFileID, r.ProjectID, r.Tag, r.Coverage}
 	}
 
-	a.success(writer, append(results, paging)...)
+	a.renderSuccess(writer, append(results, paging)...)
 }
 
 func (a *reportAPI) Delete(writer http.ResponseWriter, request *http.Request, params url.Values) {
@@ -121,7 +121,7 @@ func (a *reportAPI) Delete(writer http.ResponseWriter, request *http.Request, pa
 
 	if e != nil {
 		log.Printf("unauthorized attempt (error %v)", e)
-		a.error(writer, "invalid-report")
+		a.renderError(writer, "invalid-report")
 		return
 	}
 
@@ -131,11 +131,11 @@ func (a *reportAPI) Delete(writer http.ResponseWriter, request *http.Request, pa
 
 	if _, e := a.reports.DeleteReports(blueprint); e != nil {
 		log.Printf("unable to delete report (error %v)", e)
-		a.error(writer, "server-error")
+		a.renderError(writer, "server-error")
 		return
 	}
 
-	a.success(writer, nil)
+	a.renderSuccess(writer, nil)
 }
 
 func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, params url.Values) {
@@ -143,12 +143,12 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 
 	if e != nil {
 		log.Printf("unable to find project (error %v) (header %v)", e, request.Header)
-		a.error(writer, "not-found")
+		a.renderError(writer, "not-found")
 		return
 	}
 
 	if e := request.ParseMultipartForm(maxReportFileSize); e != nil {
-		a.error(writer, "invalid-request")
+		a.renderError(writer, "invalid-request")
 		return
 	}
 
@@ -156,12 +156,12 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 
 	if fmt.Sprintf("%d", project.ID) != projectID && project.SystemID != projectID {
 		log.Printf("requested project != authed (request: %s, auth: %d)", projectID, project.ID)
-		a.error(writer, "invalid-project")
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
 	if tag == "" {
-		a.error(writer, "invalid-tag")
+		a.renderError(writer, "invalid-tag")
 		return
 	}
 
@@ -169,7 +169,7 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 
 	if e != nil {
 		log.Printf("unable to parse request body for creating report in project %s (error %v)", projectID, e)
-		a.error(writer, e.Error())
+		a.renderError(writer, e.Error())
 		return
 	}
 
@@ -179,7 +179,7 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 
 	if e != nil {
 		log.Printf("unable to allocate new file: %s (id: %s)", e.Error(), fileID)
-		a.error(writer, "server-error")
+		a.renderError(writer, "server-error")
 		return
 	}
 
@@ -193,18 +193,18 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 
 	if _, e := a.reports.CreateReports(record); e != nil {
 		log.Printf("unable to save report: %s", e.Error())
-		a.error(writer, e.Error())
+		a.renderError(writer, e.Error())
 		return
 	}
 
 	primaryIDs, e := a.reports.SelectIDs(&models.ReportBlueprint{SystemID: []string{record.SystemID}})
 
 	if e != nil {
-		a.error(writer, "invalid-report")
+		a.renderError(writer, "invalid-report")
 		return
 	}
 
-	a.success(writer, struct {
+	a.renderSuccess(writer, struct {
 		ID         uint    `json:"id"`
 		SystemID   string  `json:"system_id"`
 		Tag        string  `json:"tag"`
