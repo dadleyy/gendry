@@ -11,9 +11,9 @@ import "github.com/dadleyy/gendry/gendry/models"
 import "github.com/dadleyy/gendry/gendry/constants"
 
 // NewProjectAPI creates the api endpoint that is able to create new projects.
-func NewProjectAPI(store models.ProjectStore) APIEndpoint {
+func NewProjectAPI(store models.ProjectStore, log LeveledLogger) APIEndpoint {
 	api := &projectAPI{
-		LeveledLogger: NewLogger(LogLabel("project api")),
+		LeveledLogger: log,
 		store:         store,
 	}
 

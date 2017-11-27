@@ -1,10 +1,12 @@
 package main
 
 import "os"
+import "io"
 import "fmt"
 import "flag"
 import "regexp"
 import "net/url"
+import "log/syslog"
 import "database/sql"
 import "github.com/joho/godotenv"
 import "github.com/go-sql-driver/mysql"
@@ -51,10 +53,67 @@ func (o *cliOptions) ConnectionString() string {
 	return fmt.Sprintf(dbConnectionString, params...)
 }
 
+type leveledLogger struct {
+	output io.Writer
+	tag    string
+}
+
+func (l *leveledLogger) write(level string, format string, items ...interface{}) {
+	message := fmt.Sprintf(format, items...)
+	fmt.Fprintf(l.output, "%s [%s] %s", level, l.tag, message)
+}
+
+func (l *leveledLogger) Debugf(format string, items ...interface{}) {
+	l.write("debug", format, items...)
+}
+
+func (l *leveledLogger) Infof(format string, items ...interface{}) {
+	l.write("info", format, items...)
+}
+
+func (l *leveledLogger) Warnf(format string, items ...interface{}) {
+	l.write("warn", format, items...)
+}
+
+func (l *leveledLogger) Errorf(format string, items ...interface{}) {
+	l.write("error", format, items...)
+}
+
+func logger(tag string) gendry.LeveledLogger {
+	l := leveledLogger{
+		output: logOuput,
+		tag:    tag,
+	}
+
+	return &l
+}
+
+var logOuput io.Writer = os.Stdout
+
 func main() {
 	godotenv.Load()
 	options := cliOptions{}
-	log := gendry.NewLogger(gendry.LogLabel("main"))
+
+	if os.Getenv(constants.SyslogAddressEnvVariable) != "" && os.Getenv(constants.SyslogNetworkEnvVariable) != "" {
+		addr := os.Getenv(constants.SyslogAddressEnvVariable)
+		network := os.Getenv(constants.SyslogNetworkEnvVariable)
+		tag := os.Getenv(constants.SyslogTagEnvVariable)
+		connection, e := syslog.Dial(network, addr, syslog.LOG_EMERG|syslog.LOG_KERN, tag)
+
+		if e != nil {
+			panic(e)
+		}
+
+		logOuput = connection
+
+		if e := connection.Info("starting remote gendry syslog..."); e != nil {
+			panic(e)
+		}
+
+		defer connection.Close()
+	}
+
+	log := logger("main")
 
 	flag.StringVar(&options.address, "address", "0.0.0.0:8080", "the address to bind the http listener to")
 	flag.StringVar(&options.reportHome, "report-home", defaultReportHome, "where to look for coverage reports")
@@ -70,8 +129,6 @@ func main() {
 	flag.StringVar(&options.awsAccessToken, "aws-access-token", "", "aws access token")
 	flag.StringVar(&options.awsBucketName, "aws-bucket-name", "", "aws access token")
 	flag.Parse()
-
-	log.Infof("hello world")
 
 	if options.address == "" {
 		log.Errorf("invalid address")
@@ -129,11 +186,11 @@ func main() {
 
 	routes := &gendry.RouteList{
 		badgeEndpoint:                    gendry.NewDisplayAPI(rs, ps, fs),
-		regexp.MustCompile("^/reports"):  gendry.NewReportAPI(rs, ps, fs),
-		regexp.MustCompile("^/projects"): gendry.NewProjectAPI(ps),
+		regexp.MustCompile("^/reports"):  gendry.NewReportAPI(rs, ps, fs, logger("report api")),
+		regexp.MustCompile("^/projects"): gendry.NewProjectAPI(ps, logger("projects api")),
 	}
 
-	runtime := gendry.NewRuntime(routes)
+	runtime := gendry.NewRuntime(routes, logger("runtime"))
 
 	go runtime.Start(options.address, closed)
 

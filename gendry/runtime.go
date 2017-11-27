@@ -1,7 +1,6 @@
 package gendry
 
 import "io"
-import "log"
 import "strings"
 import "net/http"
 
@@ -11,11 +10,16 @@ type Runtime interface {
 }
 
 // NewRuntime returns an initialized runtime using the provided route list.
-func NewRuntime(routes *RouteList) Runtime {
-	return &runtime{routes}
+func NewRuntime(routes *RouteList, log LeveledLogger) Runtime {
+	r := &runtime{
+		LeveledLogger: log,
+		routes:        routes,
+	}
+	return r
 }
 
 type runtime struct {
+	LeveledLogger
 	routes *RouteList
 }
 
@@ -23,7 +27,7 @@ func (r *runtime) ServeHTTP(responseWriter http.ResponseWriter, request *http.Re
 	route, params, found := r.routes.Match(request)
 
 	if !found {
-		log.Printf("not found: %v", request.URL)
+		r.Debugf("not found: %v", request.URL)
 		responseWriter.WriteHeader(404)
 		io.Copy(responseWriter, strings.NewReader("not-found"))
 		return
