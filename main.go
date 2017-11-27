@@ -1,11 +1,12 @@
 package main
 
 import "os"
-import "log"
+import "io"
 import "fmt"
 import "flag"
 import "regexp"
 import "net/url"
+import "log/syslog"
 import "database/sql"
 import "github.com/joho/godotenv"
 import "github.com/go-sql-driver/mysql"
@@ -23,6 +24,8 @@ const (
 	defaultDatbasePort = "3306"
 )
 
+type environment func(string) string
+
 type cliOptions struct {
 	address          string
 	reportHome       string
@@ -39,6 +42,42 @@ type cliOptions struct {
 	awsBucketName    string
 }
 
+func (o *cliOptions) env(env environment) error {
+	if key := env(constants.AWSAccessKeyIDEnvVariable); key != "" {
+		o.awsAccessKeyID = key
+	}
+
+	if key := env(constants.AWSAccessKeyEnvVariable); key != "" {
+		o.awsAccessKey = key
+	}
+
+	if bucket := env(constants.AWSBucketNameEnvVariable); bucket != "" {
+		o.awsBucketName = bucket
+	}
+
+	if port := env(constants.DatabasePortEnvVariable); port != "" {
+		o.databasePort = port
+	}
+
+	if host := env(constants.DatabaseHostnameEnvVariable); host != "" {
+		o.databaseHostname = host
+	}
+
+	if password := env(constants.DatabasePasswordEnvVariable); password != "" {
+		o.databasePassword = password
+	}
+
+	if user := env(constants.DatabaseUsernameEnvVariable); user != "" {
+		o.databaseUsername = user
+	}
+
+	if db := env(constants.DatabaseDatabaseEnvVariable); db != "" {
+		o.databaseName = db
+	}
+
+	return nil
+}
+
 func (o *cliOptions) ConnectionString() string {
 	params := []interface{}{
 		o.databaseUsername,
@@ -52,9 +91,67 @@ func (o *cliOptions) ConnectionString() string {
 	return fmt.Sprintf(dbConnectionString, params...)
 }
 
+type leveledLogger struct {
+	output io.Writer
+	tag    string
+}
+
+func (l *leveledLogger) write(level string, format string, items ...interface{}) {
+	message := fmt.Sprintf(format, items...)
+	fmt.Fprintf(l.output, "%s [%s] %s", level, l.tag, message)
+}
+
+func (l *leveledLogger) Debugf(format string, items ...interface{}) {
+	l.write("debug", format, items...)
+}
+
+func (l *leveledLogger) Infof(format string, items ...interface{}) {
+	l.write("info", format, items...)
+}
+
+func (l *leveledLogger) Warnf(format string, items ...interface{}) {
+	l.write("warn", format, items...)
+}
+
+func (l *leveledLogger) Errorf(format string, items ...interface{}) {
+	l.write("error", format, items...)
+}
+
+func logger(tag string) gendry.LeveledLogger {
+	l := leveledLogger{
+		output: logOuput,
+		tag:    tag,
+	}
+
+	return &l
+}
+
+var logOuput io.Writer = os.Stdout
+
 func main() {
 	godotenv.Load()
 	options := cliOptions{}
+
+	if os.Getenv(constants.SyslogAddressEnvVariable) != "" && os.Getenv(constants.SyslogNetworkEnvVariable) != "" {
+		addr := os.Getenv(constants.SyslogAddressEnvVariable)
+		network := os.Getenv(constants.SyslogNetworkEnvVariable)
+		tag := os.Getenv(constants.SyslogTagEnvVariable)
+		connection, e := syslog.Dial(network, addr, syslog.LOG_EMERG|syslog.LOG_KERN, tag)
+
+		if e != nil {
+			panic(e)
+		}
+
+		logOuput = connection
+
+		if e := connection.Info("starting remote gendry syslog..."); e != nil {
+			panic(e)
+		}
+
+		defer connection.Close()
+	}
+
+	log := logger("main")
 
 	flag.StringVar(&options.address, "address", "0.0.0.0:8080", "the address to bind the http listener to")
 	flag.StringVar(&options.reportHome, "report-home", defaultReportHome, "where to look for coverage reports")
@@ -72,19 +169,12 @@ func main() {
 	flag.Parse()
 
 	if options.address == "" {
-		log.Fatal("invalid address")
+		log.Errorf("invalid address")
+		return
 	}
 
-	if key := os.Getenv(constants.AWSAccessKeyIDEnvVariable); key != "" {
-		options.awsAccessKeyID = key
-	}
-
-	if key := os.Getenv(constants.AWSAccessKeyEnvVariable); key != "" {
-		options.awsAccessKey = key
-	}
-
-	if bucket := os.Getenv(constants.AWSBucketNameEnvVariable); bucket != "" {
-		options.awsBucketName = bucket
+	if e := options.env(os.Getenv); e != nil {
+		panic(e)
 	}
 
 	config := mysql.Config{
@@ -98,11 +188,13 @@ func main() {
 	db, e := sql.Open("mysql", config.FormatDSN())
 
 	if e != nil {
-		log.Fatalf("unable to connect to database: %s", e.Error())
+		log.Errorf("unable to connect to database: %s", e.Error())
+		return
 	}
 
 	if e := db.Ping(); e != nil {
-		log.Fatalf("unable to connect to database: %s", e.Error())
+		log.Errorf("unable to connect to database: %s", e.Error())
+		return
 	}
 
 	closed := make(chan error)
@@ -124,15 +216,15 @@ func main() {
 
 	routes := &gendry.RouteList{
 		badgeEndpoint:                    gendry.NewDisplayAPI(rs, ps, fs),
-		regexp.MustCompile("^/reports"):  gendry.NewReportAPI(rs, ps, fs),
-		regexp.MustCompile("^/projects"): gendry.NewProjectAPI(ps),
+		regexp.MustCompile("^/reports"):  gendry.NewReportAPI(rs, ps, fs, logger("report api")),
+		regexp.MustCompile("^/projects"): gendry.NewProjectAPI(ps, logger("projects api")),
 	}
 
-	runtime := gendry.NewRuntime(routes)
+	runtime := gendry.NewRuntime(routes, logger("runtime"))
 
 	go runtime.Start(options.address, closed)
 
-	log.Printf("server starting on %s", options.address)
+	log.Infof("server starting on %s", options.address)
 	<-closed
-	log.Printf("server terminating")
+	log.Infof("server terminating")
 }

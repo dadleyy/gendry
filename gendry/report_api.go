@@ -1,7 +1,6 @@
 package gendry
 
 import "io"
-import "log"
 import "fmt"
 import "path"
 import "strconv"
@@ -23,15 +22,19 @@ const (
 )
 
 // NewReportAPI returns an api for storing and retreiving reports
-func NewReportAPI(reports models.ReportStore, projects models.ProjectStore, files FileStore) APIEndpoint {
-	return &reportAPI{
-		filestore: files,
-		reports:   reports,
-		projects:  projects,
+func NewReportAPI(re models.ReportStore, pr models.ProjectStore, fs FileStore, log LeveledLogger) APIEndpoint {
+	api := &reportAPI{
+		LeveledLogger: log,
+		filestore:     fs,
+		reports:       re,
+		projects:      pr,
 	}
+
+	return api
 }
 
 type reportAPI struct {
+	LeveledLogger
 	notImplementedRoute
 	jsonResponder
 	filestore FileStore
@@ -48,8 +51,8 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 	project, e := a.project(request)
 
 	if e != nil {
-		log.Printf("unable to find project (error %s)", e.Error())
-		a.error(writer, "invalid-project")
+		a.Warnf("unable to find project (error %s)", e.Error())
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
@@ -69,12 +72,12 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 	matches, e := a.projects.FindProjects(blueprint)
 
 	if e != nil || len(matches) != 1 {
-		a.error(writer, "not-found")
+		a.renderError(writer, "not-found")
 		return
 	}
 
 	if matches[0].SystemID != project.SystemID {
-		a.error(writer, "invalid-project")
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
@@ -87,16 +90,16 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 	reports, e := a.reports.FindReports(bp)
 
 	if e != nil {
-		log.Printf("unable to find reports for project %s (error %v)", matches[0].SystemID, e)
-		a.error(writer, "server-error")
+		a.Warnf("unable to find reports for project %s (error %v)", matches[0].SystemID, e)
+		a.renderError(writer, "server-error")
 		return
 	}
 
 	paging.total, e = a.reports.CountReports(bp)
 
 	if e != nil {
-		log.Printf("unable to find reports for project %s (error %v)", matches[0].SystemID, e)
-		a.error(writer, "server-error")
+		a.Warnf("unable to find reports for project %s (error %v)", matches[0].SystemID, e)
+		a.renderError(writer, "server-error")
 		return
 	}
 
@@ -113,15 +116,15 @@ func (a *reportAPI) Get(writer http.ResponseWriter, request *http.Request, param
 		}{r.ID, r.SystemID, r.HTMLFileID, r.ProjectID, r.Tag, r.Coverage}
 	}
 
-	a.success(writer, append(results, paging)...)
+	a.renderSuccess(writer, append(results, paging)...)
 }
 
 func (a *reportAPI) Delete(writer http.ResponseWriter, request *http.Request, params url.Values) {
 	report, e := a.authorizeLookup(request)
 
 	if e != nil {
-		log.Printf("unauthorized attempt (error %v)", e)
-		a.error(writer, "invalid-report")
+		a.Warnf("unauthorized attempt (error %v)", e)
+		a.renderError(writer, "invalid-report")
 		return
 	}
 
@@ -130,56 +133,54 @@ func (a *reportAPI) Delete(writer http.ResponseWriter, request *http.Request, pa
 	}
 
 	if _, e := a.reports.DeleteReports(blueprint); e != nil {
-		log.Printf("unable to delete report (error %v)", e)
-		a.error(writer, "server-error")
+		a.Warnf("unable to delete report (error %v)", e)
+		a.renderError(writer, "server-error")
 		return
 	}
 
-	a.success(writer, nil)
+	a.renderSuccess(writer, nil)
 }
 
 func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, params url.Values) {
 	project, e := a.project(request)
 
 	if e != nil {
-		log.Printf("unable to find project (error %v) (header %v)", e, request.Header)
-		a.error(writer, "not-found")
+		a.Warnf("unable to find project (error %v) (header %v)", e, request.Header)
+		a.renderError(writer, "not-found")
 		return
 	}
 
 	if e := request.ParseMultipartForm(maxReportFileSize); e != nil {
-		a.error(writer, "invalid-request")
+		a.renderError(writer, "invalid-request")
 		return
 	}
 
 	projectID, tag := request.Form.Get("project_id"), request.Form.Get("tag")
 
 	if fmt.Sprintf("%d", project.ID) != projectID && project.SystemID != projectID {
-		log.Printf("requested project != authed (request: %s, auth: %d)", projectID, project.ID)
-		a.error(writer, "invalid-project")
+		a.Warnf("requested project != authed (request: %s, auth: %d)", projectID, project.ID)
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
 	if tag == "" {
-		a.error(writer, "invalid-tag")
+		a.renderError(writer, "invalid-tag")
 		return
 	}
 
 	reports, e := a.parseReportForm(request.MultipartForm)
 
 	if e != nil {
-		log.Printf("unable to parse request body for creating report in project %s (error %v)", projectID, e)
-		a.error(writer, e.Error())
+		a.Warnf("unable to parse request body for creating report in project %s (error %v)", projectID, e)
+		a.renderError(writer, e.Error())
 		return
 	}
-
-	log.Printf("valid report files, coverage: %v", reports.coverage.coverage)
 
 	fileID, e := a.writeReportHTMLFile(reports.html)
 
 	if e != nil {
-		log.Printf("unable to allocate new file: %s (id: %s)", e.Error(), fileID)
-		a.error(writer, "server-error")
+		a.Warnf("unable to allocate new file: %s (id: %s)", e.Error(), fileID)
+		a.renderError(writer, "server-error")
 		return
 	}
 
@@ -192,19 +193,21 @@ func (a *reportAPI) Post(writer http.ResponseWriter, request *http.Request, para
 	}
 
 	if _, e := a.reports.CreateReports(record); e != nil {
-		log.Printf("unable to save report: %s", e.Error())
-		a.error(writer, e.Error())
+		a.Errorf("unable to save report: %s", e.Error())
+		a.renderError(writer, e.Error())
 		return
 	}
 
 	primaryIDs, e := a.reports.SelectIDs(&models.ReportBlueprint{SystemID: []string{record.SystemID}})
 
 	if e != nil {
-		a.error(writer, "invalid-report")
+		a.renderError(writer, "invalid-report")
 		return
 	}
 
-	a.success(writer, struct {
+	a.Infof("successfully created report (id %s) - coverage %f", record.SystemID, record.Coverage)
+
+	a.renderSuccess(writer, struct {
 		ID         uint    `json:"id"`
 		SystemID   string  `json:"system_id"`
 		Tag        string  `json:"tag"`
@@ -298,7 +301,7 @@ func (a *reportAPI) parseReportForm(form *multipart.Form) (*reportFiles, error) 
 		ext := path.Ext(f.Filename)
 
 		if ext != ".html" && ext != ".txt" {
-			log.Printf("received strange filetype during report creation: %s", ext)
+			a.Warnf("received strange filetype during report creation: %s", ext)
 			continue
 		}
 
@@ -310,7 +313,7 @@ func (a *reportAPI) parseReportForm(form *multipart.Form) (*reportFiles, error) 
 		coverage, e := f.Open()
 
 		if e != nil {
-			log.Printf("unable to open coverage file during report creation: %s", e.Error())
+			a.Warnf("unable to open coverage file during report creation: %s", e.Error())
 			return nil, fmt.Errorf("invalid-coverage")
 		}
 
@@ -318,7 +321,7 @@ func (a *reportAPI) parseReportForm(form *multipart.Form) (*reportFiles, error) 
 		result.coverage, e = parseCoverProfile(coverage)
 
 		if e != nil {
-			log.Printf("unable to open coverage file during report creation: %s", e.Error())
+			a.Warnf("unable to open coverage file during report creation: %s", e.Error())
 			return nil, fmt.Errorf("invalid-coverage")
 		}
 	}

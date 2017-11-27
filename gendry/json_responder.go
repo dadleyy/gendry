@@ -7,7 +7,7 @@ import "encoding/json"
 type jsonResponder struct {
 }
 
-func (r jsonResponder) success(writer http.ResponseWriter, data ...interface{}) {
+func (r jsonResponder) renderSuccess(writer http.ResponseWriter, data ...interface{}) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(200)
 	meta := make(map[string]interface{})
@@ -38,7 +38,7 @@ func (r jsonResponder) success(writer http.ResponseWriter, data ...interface{}) 
 	encoder.Encode(&response)
 }
 
-func (r jsonResponder) error(writer http.ResponseWriter, errors ...string) {
+func (r jsonResponder) renderError(writer http.ResponseWriter, errors ...string) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(422)
 	meta := make(map[string]interface{})

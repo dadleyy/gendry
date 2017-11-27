@@ -17,7 +17,7 @@ func Test_jsonResponder(t *testing.T) {
 		})
 
 		g.It("renders out a successful json response with meta, errors and data keys", func() {
-			r.success(o, struct {
+			r.renderSuccess(o, struct {
 				Name string `json:"name"`
 			}{"danny"})
 			decoder := json.NewDecoder(o.Body)
@@ -41,7 +41,7 @@ func Test_jsonResponder(t *testing.T) {
 				Name string `json:"name"`
 			}{"danny"}
 
-			r.success(o, u, pagingInfo{10, 10, 10})
+			r.renderSuccess(o, u, pagingInfo{10, 10, 10})
 
 			decoder := json.NewDecoder(o.Body)
 
@@ -63,7 +63,7 @@ func Test_jsonResponder(t *testing.T) {
 		})
 
 		g.It("renders out the error json response structure", func() {
-			r.error(o, "bad-request")
+			r.renderError(o, "bad-request")
 			decoder := json.NewDecoder(o.Body)
 			expected := struct {
 				Errors []string `json:"errors"`

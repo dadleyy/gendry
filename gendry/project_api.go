@@ -1,7 +1,6 @@
 package gendry
 
 import "io"
-import "log"
 import "fmt"
 import "bytes"
 import "net/url"
@@ -12,11 +11,17 @@ import "github.com/dadleyy/gendry/gendry/models"
 import "github.com/dadleyy/gendry/gendry/constants"
 
 // NewProjectAPI creates the api endpoint that is able to create new projects.
-func NewProjectAPI(store models.ProjectStore) APIEndpoint {
-	return &projectAPI{store: store}
+func NewProjectAPI(store models.ProjectStore, log LeveledLogger) APIEndpoint {
+	api := &projectAPI{
+		LeveledLogger: log,
+		store:         store,
+	}
+
+	return api
 }
 
 type projectAPI struct {
+	LeveledLogger
 	notImplementedRoute
 	jsonResponder
 	store models.ProjectStore
@@ -30,14 +35,14 @@ func (a *projectAPI) Delete(writer http.ResponseWriter, request *http.Request, p
 	})
 
 	if e != nil || len(projects) != 1 {
-		log.Printf("invalid project %s (error %v)", request.Header.Get(constants.ProjectAuthTokenAPIHeader), e)
-		a.error(writer, "invalid-project")
+		a.Warnf("invalid project %s (error %v)", request.Header.Get(constants.ProjectAuthTokenAPIHeader), e)
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
 	if projects[0].SystemID != projectID && fmt.Sprintf("%d", projects[0].ID) != projectID {
-		log.Printf("invalid project %s (found %v)", projectID, projects[0].SystemID)
-		a.error(writer, "invalid-project")
+		a.Warnf("invalid project %s (found %v)", projectID, projects[0].SystemID)
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
@@ -46,12 +51,14 @@ func (a *projectAPI) Delete(writer http.ResponseWriter, request *http.Request, p
 	}
 
 	if _, e := a.store.DeleteProjects(blueprint); e != nil {
-		log.Printf("unable to delete project %s (error %v)", projects[0].SystemID, e)
-		a.error(writer, "server-error")
+		a.Errorf("unable to delete project %s (error %v)", projects[0].SystemID, e)
+		a.renderError(writer, "server-error")
 		return
 	}
 
-	a.success(writer, nil)
+	a.Infof("deleted project %s (id %s)", projects[0].Name, projects[0].SystemID)
+
+	a.renderSuccess(writer, nil)
 	return
 }
 
@@ -63,7 +70,7 @@ func (a *projectAPI) Post(writer http.ResponseWriter, request *http.Request, par
 	}{}
 
 	if e := decoder.Decode(&project); e != nil {
-		a.error(writer, "invalid-project")
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
@@ -72,14 +79,14 @@ func (a *projectAPI) Post(writer http.ResponseWriter, request *http.Request, par
 	})
 
 	if e != nil {
-		log.Printf("invalid count: %s", e.Error())
-		a.error(writer, "invalid-project")
+		a.Warnf("invalid count: %s", e.Error())
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
 	if c != 0 {
-		log.Printf("duplicate project: %s", project.Name)
-		a.error(writer, "invalid-project")
+		a.Warnf("duplicate project: %s", project.Name)
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
@@ -93,12 +100,14 @@ func (a *projectAPI) Post(writer http.ResponseWriter, request *http.Request, par
 	})
 
 	if e != nil {
-		log.Printf("unable to create project: %s", e.Error())
-		a.error(writer, "invalid-project")
+		a.Warnf("unable to create project: %s", e.Error())
+		a.renderError(writer, "invalid-project")
 		return
 	}
 
-	a.success(writer, struct {
+	a.Infof("created new project %s (id %s)", project.Name, systemID)
+
+	a.renderSuccess(writer, struct {
 		ID       int64  `json:"id"`
 		SystemID string `json:"system_id"`
 		Token    string `json:"token"`

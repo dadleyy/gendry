@@ -41,10 +41,22 @@ jobs:
       - docker push dadleyy/gendry:$IMAGE_TAG
       - wget https://hyper-install.s3.amazonaws.com/hyper-linux-x86_64.tar.gz
       - tar xvzf hyper-linux-x86_64.tar.gz
+      - touch .env
+      - echo "SYSLOG_NETWORK=$DEPLOY_SYSLOG_NETWORK" >> .env
+      - echo "SYSLOG_ADDRESS=$DEPLOY_SYSLOG_ADDRESS" >> .env
+      - echo "SYSLOG_TAG=$DEPLOY_SYSLOG_TAG" >> .env
+      - echo "AWS_BUCKET_NAME=$DEPLOY_AWS_BUCKET_NAME" >> .env
+      - echo "AWS_ACCESS_ID=$DEPLOY_AWS_ACCESS_ID" >> .env
+      - echo "AWS_ACCESS_KEY=$DEPLOY_AWS_ACCESS_KEY" >> .env
+      - echo "DB_USERNAME=$DEPLOY_DB_USERNAME" >> .env
+      - echo "DB_PASSWORD=$DEPLOY_DB_PASSWORD" >> .env
+      - echo "DB_HOSTNAME=$DEPLOY_DB_HOSTNAME" >> .env
+      - echo "DB_PORT=$DEPLOY_DB_PORT" >> .env
+      - echo "DB_DATABASE=$DEPLOY_DB_DATABASE" >> .env
       - ./hyper config --accesskey=$HYPER_ACCESS_KEY --secretkey=$HYPER_SECRET_KEY --default-region=us-west-1
       - ./hyper ps -a
       - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper fip detach || echo ""
       - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper stop || echo ""
       - ./hyper ps -a -f name=gendry-* -q | xargs ./hyper rm || echo ""
-      - ./hyper run -d --name $CONTAINER_NAME -p 80:80 $IMAGE_NAME -address=0.0.0.0:80
+      - ./hyper run --env-file ./.env -d --name $CONTAINER_NAME -p 80:80 $IMAGE_NAME -address=0.0.0.0:80
       - ./hyper fip attach gendry-prod $CONTAINER_NAME
