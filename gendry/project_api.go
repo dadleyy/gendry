@@ -3,6 +3,7 @@ package gendry
 import "io"
 import "fmt"
 import "bytes"
+import "strconv"
 import "net/url"
 import "net/http"
 import "encoding/json"
@@ -22,9 +23,47 @@ func NewProjectAPI(store models.ProjectStore, log LeveledLogger) APIEndpoint {
 
 type projectAPI struct {
 	LeveledLogger
-	notImplementedRoute
 	jsonResponder
 	store models.ProjectStore
+}
+
+func (a *projectAPI) Get(writer http.ResponseWriter, request *http.Request, params url.Values) {
+	paging := a.paging(request)
+
+	blueprint := &models.ProjectBlueprint{
+		Offset: paging.offset,
+		Limit:  paging.limit,
+	}
+
+	projects, e := a.store.FindProjects(blueprint)
+
+	if e != nil {
+		a.Warnf("unable to find projects (error %v)", e)
+		a.renderError(writer, "server-error")
+		return
+	}
+
+	results := make([]interface{}, len(projects))
+
+	for i, p := range projects {
+		item := struct {
+			ID       uint   `json:"id"`
+			SystemID string `json:"system_id"`
+			Name     string `json:"name"`
+		}{p.ID, p.SystemID, p.Name}
+
+		results[i] = item
+	}
+
+	paging.total, e = a.store.CountProjects(blueprint)
+
+	if e != nil {
+		a.Warnf("unable to find projects (error %v)", e)
+		a.renderError(writer, "server-error")
+		return
+	}
+
+	a.renderSuccess(writer, append(results, paging)...)
 }
 
 func (a *projectAPI) Delete(writer http.ResponseWriter, request *http.Request, params url.Values) {
@@ -119,4 +158,18 @@ func (a *projectAPI) generateToken() string {
 	output := new(bytes.Buffer)
 	io.Copy(output, newTokenGenerator(20))
 	return output.String()
+}
+
+func (a *projectAPI) paging(request *http.Request) pagingInfo {
+	paging := pagingInfo{limit: 10, offset: 0}
+
+	if offset, e := strconv.Atoi(request.URL.Query().Get(constants.OffsetParamName)); e == nil {
+		paging.offset = offset
+	}
+
+	if limit, e := strconv.Atoi(request.URL.Query().Get(constants.LimitParamName)); e == nil {
+		paging.limit = limit
+	}
+
+	return paging
 }
