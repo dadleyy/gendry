@@ -98,7 +98,7 @@ type leveledLogger struct {
 
 func (l *leveledLogger) write(level string, format string, items ...interface{}) {
 	message := fmt.Sprintf(format, items...)
-	fmt.Fprintf(l.output, "%s [%s] %s", level, l.tag, message)
+	fmt.Fprintf(l.output, "%s [%s] %s\n", level, l.tag, message)
 }
 
 func (l *leveledLogger) Debugf(format string, items ...interface{}) {
