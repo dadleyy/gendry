@@ -24,6 +24,8 @@ const (
 	defaultDatbasePort = "3306"
 )
 
+type environment func(string) string
+
 type cliOptions struct {
 	address          string
 	reportHome       string
@@ -38,6 +40,42 @@ type cliOptions struct {
 	awsAccessKey     string
 	awsAccessToken   string
 	awsBucketName    string
+}
+
+func (o *cliOptions) env(env environment) error {
+	if key := env(constants.AWSAccessKeyIDEnvVariable); key != "" {
+		o.awsAccessKeyID = key
+	}
+
+	if key := env(constants.AWSAccessKeyEnvVariable); key != "" {
+		o.awsAccessKey = key
+	}
+
+	if bucket := env(constants.AWSBucketNameEnvVariable); bucket != "" {
+		o.awsBucketName = bucket
+	}
+
+	if port := env(constants.DatabasePortEnvVariable); port != "" {
+		o.databasePort = port
+	}
+
+	if host := env(constants.DatabaseHostnameEnvVariable); host != "" {
+		o.databaseHostname = host
+	}
+
+	if password := env(constants.DatabasePasswordEnvVariable); password != "" {
+		o.databasePassword = password
+	}
+
+	if user := env(constants.DatabaseUsernameEnvVariable); user != "" {
+		o.databaseUsername = user
+	}
+
+	if db := env(constants.DatabaseDatabaseEnvVariable); db != "" {
+		o.databaseName = db
+	}
+
+	return nil
 }
 
 func (o *cliOptions) ConnectionString() string {
@@ -135,16 +173,8 @@ func main() {
 		return
 	}
 
-	if key := os.Getenv(constants.AWSAccessKeyIDEnvVariable); key != "" {
-		options.awsAccessKeyID = key
-	}
-
-	if key := os.Getenv(constants.AWSAccessKeyEnvVariable); key != "" {
-		options.awsAccessKey = key
-	}
-
-	if bucket := os.Getenv(constants.AWSBucketNameEnvVariable); bucket != "" {
-		options.awsBucketName = bucket
+	if e := options.env(os.Getenv); e != nil {
+		panic(e)
 	}
 
 	config := mysql.Config{
