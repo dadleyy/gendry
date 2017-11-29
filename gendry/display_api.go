@@ -2,7 +2,6 @@ package gendry
 
 import "io"
 import "fmt"
-import "log"
 import "path"
 import "net/url"
 import "net/http"
@@ -11,17 +10,19 @@ import "github.com/dadleyy/gendry/gendry/models"
 import "github.com/dadleyy/gendry/gendry/constants"
 
 // NewDisplayAPI returns a new APIEndpoint capable of returning badge data from shields.io.
-func NewDisplayAPI(reports models.ReportStore, projects models.ProjectStore, files FileStore) APIEndpoint {
+func NewDisplayAPI(re models.ReportStore, pr models.ProjectStore, fs FileStore, log LeveledLogger) APIEndpoint {
 	api := &displayAPI{
-		projects: projects,
-		reports:  reports,
-		files:    files,
+		LeveledLogger: log,
+		projects:      pr,
+		reports:       re,
+		files:         fs,
 	}
 	return api
 }
 
 // displayAPI is responsible for writing the svg badge result from shields.io given a report name.
 type displayAPI struct {
+	LeveledLogger
 	notImplementedRoute
 	projects models.ProjectStore
 	reports  models.ReportStore
@@ -34,7 +35,7 @@ func (a *displayAPI) Get(writer http.ResponseWriter, request *http.Request, para
 	})
 
 	if e != nil || len(matches) != 1 {
-		log.Printf("uanble to find project %s (error: %v) (count: %d)", params.Get("project"), e, len(matches))
+		a.Warnf("uanble to find project %s (error: %v) (count: %d)", params.Get("project"), e, len(matches))
 		writer.WriteHeader(404)
 		fmt.Fprintf(writer, "not-found")
 		return
@@ -46,7 +47,7 @@ func (a *displayAPI) Get(writer http.ResponseWriter, request *http.Request, para
 	})
 
 	if e != nil || len(reports) != 1 {
-		log.Printf("uanble to find report %s (error: %v) (count: %d)", params.Get("tag"), e, len(reports))
+		a.Warnf("uanble to find report %s (error: %v) (count: %d)", params.Get("tag"), e, len(reports))
 		writer.WriteHeader(404)
 		fmt.Fprintf(writer, "not-found")
 		return
@@ -71,7 +72,7 @@ func (a *displayAPI) Get(writer http.ResponseWriter, request *http.Request, para
 	shieldURL, e := url.Parse(fmt.Sprintf(constants.ShieldURLTemplate, escapedConfig))
 
 	if e != nil {
-		log.Printf("unable to build badge url: %s", e.Error())
+		a.Warnf("unable to build badge url: %s", e.Error())
 		writer.WriteHeader(500)
 		return
 	}
@@ -86,7 +87,7 @@ func (a *displayAPI) Get(writer http.ResponseWriter, request *http.Request, para
 	shieldRequest, e := http.NewRequest("GET", shieldURL.String(), nil)
 
 	if e != nil {
-		log.Printf("unable to load shield: %s", e.Error())
+		a.Warnf("unable to load shield: %s", e.Error())
 		writer.WriteHeader(404)
 		return
 	}
@@ -94,7 +95,7 @@ func (a *displayAPI) Get(writer http.ResponseWriter, request *http.Request, para
 	shieldResponse, e := client.Do(shieldRequest)
 
 	if e != nil {
-		log.Printf("unable to request shield data: %s", e.Error())
+		a.Warnf("unable to request shield data: %s", e.Error())
 		writer.WriteHeader(502)
 		return
 	}
@@ -110,11 +111,11 @@ func (a *displayAPI) Get(writer http.ResponseWriter, request *http.Request, para
 }
 
 func (a *displayAPI) renderHTML(writer http.ResponseWriter, report *models.Report) {
-	log.Printf("loading report html for %s", report.SystemID)
+	a.Debugf("loading report html for %s", report.SystemID)
 	reader, e := a.files.FindFile(path.Join("reports", report.HTMLFileID))
 
 	if e != nil {
-		log.Printf("unable to find file for report: %v", e)
+		a.Warnf("unable to find file for report: %v", e)
 		writer.WriteHeader(404)
 		return
 	}
@@ -129,5 +130,5 @@ func (a *displayAPI) renderHTML(writer http.ResponseWriter, report *models.Repor
 		return
 	}
 
-	log.Printf("strange copy on report html, bytes sent: %d (error: %v)", amt, e)
+	a.Warnf("strange copy on report html, bytes sent: %d (error: %v)", amt, e)
 }
